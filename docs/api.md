@@ -1,56 +1,200 @@
 # API 仕様
 
-> **状態: 未確定。** まだ1本も実装していない。
-> エンドポイントを足すたびにここを更新し、iOS 側との認識ズレを防ぐ。
+> **状態: MVP 分は確定(実装はこれから)。** エンドポイントの追加・変更は同じ PR でこのファイルを更新し、
+> iOS 側との認識ズレを防ぐ。
 
-ベース URL
+## 共通事項
 
-| 環境 | URL |
+| 項目 | 内容 |
 |---|---|
-| ローカル | `http://localhost:3000` |
-
-現状 Rails 標準のヘルスチェックだけが生きている。
+| ベース URL(ローカル) | `http://localhost:3000` |
+| プレフィックス | `/api/v1` |
+| フォーマット | JSON(リクエスト・レスポンスとも) |
+| 認証 | なし(MVP は単一ユーザー前提) |
+| 日時 | ISO 8601。リクエストはタイムゾーン付き、レスポンスは UTC |
+| バリデーションエラー | `422 Unprocessable Entity` + `{ "errors": { "field": ["メッセージ"] } }` |
+| 存在しない ID | `404 Not Found` + `{ "errors": { "base": ["not found"] } }` |
 
 ## GET /up
 
-Rails 組み込み。アプリが起動していれば 200、起動時例外があれば 500。
+Rails 組み込みヘルスチェック。アプリが起動していれば 200。iOS の疎通確認画面が使用中。
 
-```bash
-curl -i http://localhost:3000/up
-```
+---
 
-## 実装予定
-
-MVP スコープに合わせて以下から着手する。
-
-| メソッド | パス | 用途 |
-|---|---|---|
-| `POST` | `/api/v1/encounters` | 出会いの記録（音声 or ワンタップ） |
-| `GET` | `/api/v1/people` | 記録した人の一覧 |
-| `GET` | `/api/v1/people/:id` | 1人の詳細と接触履歴 |
-
-## 記述フォーマット
-
-エンドポイントを足すときはこの粒度で書く。
-
-````markdown
 ## POST /api/v1/encounters
+
+出会いを記録する。記録画面から呼ばれる MVP の中心 API。
+
+- `person_id` を渡せば既存人物への追記、`person_name` だけなら**新規人物を作成**する
+- どちらも無い/両方空なら 422。両方ある場合は `person_id` を優先
+- `met_at` 省略時はサーバの現在時刻
+- `tag_names` のタグは無ければ作成される(find_or_create)
+- 成功時、対象人物の `last_encountered_at` が更新される
 
 リクエスト
 
 ```json
-{ "encounter": { "person_name": "たなか", "met_at": "2026-08-14T19:00:00+09:00", "topic": "ハッカソンで同じチーム" } }
+{
+  "encounter": {
+    "person_name": "たなか",
+    "met_at": "2026-08-14T19:00:00+09:00",
+    "topic": "ハッカソンで同じチーム",
+    "memo": "音声文字起こしのテキスト。Rails が好きらしい。",
+    "tag_names": ["ハッカソン", "STECH"]
+  }
+}
 ```
+
+既存人物への追記の場合は `person_name` の代わりに `"person_id": 1`。
 
 レスポンス `201 Created`
 
 ```json
-{ "id": 1, "person": { "id": 1, "name": "たなか" }, "met_at": "..." }
+{
+  "encounter": {
+    "id": 1,
+    "met_at": "2026-08-14T10:00:00Z",
+    "topic": "ハッカソンで同じチーム",
+    "memo": "音声文字起こしのテキスト。Rails が好きらしい。",
+    "tags": [
+      { "id": 1, "name": "ハッカソン" },
+      { "id": 2, "name": "STECH" }
+    ],
+    "person": { "id": 1, "name": "たなか", "last_encountered_at": "2026-08-14T10:00:00Z" }
+  }
+}
 ```
 
 エラー `422 Unprocessable Entity`
 
 ```json
-{ "errors": { "person_name": ["can't be blank"] } }
+{ "errors": { "person_name": ["を入力してください"] } }
 ```
-````
+
+---
+
+## GET /api/v1/people
+
+記録した人の一覧。`last_encountered_at` の降順(最近会った人が先頭)。
+
+- MVP ではページネーション・検索パラメータなし。全件返す
+- 記録画面の入力補完(名前サジェスト)もこの一覧をクライアント側でフィルタして使う
+
+レスポンス `200 OK`
+
+```json
+{
+  "people": [
+    {
+      "id": 1,
+      "name": "たなか",
+      "note": "",
+      "last_encountered_at": "2026-08-14T10:00:00Z",
+      "encounters_count": 3
+    }
+  ]
+}
+```
+
+---
+
+## GET /api/v1/people/:id
+
+1 人の詳細と接触履歴。履歴は `met_at` の降順。
+
+レスポンス `200 OK`
+
+```json
+{
+  "person": {
+    "id": 1,
+    "name": "たなか",
+    "note": "Rails 好き。○○大学",
+    "last_encountered_at": "2026-08-14T10:00:00Z",
+    "encounters": [
+      {
+        "id": 1,
+        "met_at": "2026-08-14T10:00:00Z",
+        "topic": "ハッカソンで同じチーム",
+        "memo": "…",
+        "tags": [{ "id": 1, "name": "ハッカソン" }]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## PATCH /api/v1/people/:id
+
+名前・メモの事後修正。「曖昧に登録して後から直す」を支える API。
+
+リクエスト
+
+```json
+{ "person": { "name": "田中太郎", "note": "○○大学。Rails 好き" } }
+```
+
+レスポンス `200 OK`(GET /api/v1/people/:id と同じ形の `person`、ただし `encounters` は含まない)
+
+```json
+{
+  "person": { "id": 1, "name": "田中太郎", "note": "○○大学。Rails 好き", "last_encountered_at": "2026-08-14T10:00:00Z" }
+}
+```
+
+---
+
+## GET /api/v1/tags
+
+タグの一覧。`name` 昇順の全件。記録画面のワンタップチップの候補に使う。
+タグの作成 API はない(encounter 作成時の `tag_names` で暗黙に作られる)。
+
+レスポンス `200 OK`
+
+```json
+{
+  "tags": [
+    { "id": 2, "name": "STECH" },
+    { "id": 1, "name": "ハッカソン" }
+  ]
+}
+```
+
+---
+
+## GET /api/v1/reminders/today
+
+今日の想起対象(1 人)。日次バッチが生成した reminders を返すだけで、この API 自体は選定しない。
+
+- iOS はアプリ起動時・通知タップ時にこれを叩いて「今日の一人」画面を出す
+- 対象がいない日(候補ゼロ・バッチ未実行)は `reminder: null` を返す(404 にはしない)
+
+レスポンス `200 OK`
+
+```json
+{
+  "reminder": {
+    "id": 1,
+    "remind_on": "2026-08-14",
+    "person": {
+      "id": 1,
+      "name": "たなか",
+      "note": "",
+      "last_encountered_at": "2026-07-01T10:00:00Z",
+      "last_encounter": {
+        "met_at": "2026-07-01T10:00:00Z",
+        "topic": "ハッカソンで同じチーム",
+        "tags": [{ "id": 1, "name": "ハッカソン" }]
+      }
+    }
+  }
+}
+```
+
+対象がいない日
+
+```json
+{ "reminder": null }
+```
