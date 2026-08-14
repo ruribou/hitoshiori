@@ -1,0 +1,4 @@
+interface:
+  display_name: "ひとしおりレビュー"
+  short_description: "差分をレビューし、指摘を .claude/reviews/ に修正指示書として残します"
+  default_prompt: "$review-hitoshiori-changes を使って、現在のブランチの差分をレビューし、指摘を優先度順の修正指示書として .claude/reviews/ に書き出してください。"
