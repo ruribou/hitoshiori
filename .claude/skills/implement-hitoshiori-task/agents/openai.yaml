@@ -1,0 +1,4 @@
+interface:
+  display_name: "ひとしおりタスク実装"
+  short_description: "タスク仕様に沿って実装・テスト・受け入れ確認を進めます"
+  default_prompt: "$implement-hitoshiori-task を使って、依存関係を満たす次のタスクを実装し、受け入れ条件をすべて検証してください。"
