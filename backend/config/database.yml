@@ -1,0 +1,52 @@
+# 接続先は compose.yml から環境変数で渡す。
+# ホストから直接 rails を叩く場合は DB_HOST=localhost が既定値になる。
+#
+# development / test も production と同じく queue DB を分けている。
+# Solid Queue のテーブルがアプリ本体のスキーマに混ざらず、
+# `db:reset` などでジョブ用テーブルを巻き込まずに済むため。
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  # For details on connection pooling, see Rails configuration guide
+  # https://guides.rubyonrails.org/configuring.html#database-pooling
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  host: <%= ENV.fetch("DB_HOST", "localhost") %>
+  port: <%= ENV.fetch("DB_PORT", 5432) %>
+  username: <%= ENV.fetch("DB_USERNAME", "postgres") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "password") %>
+
+development:
+  primary:
+    <<: *default
+    database: hitoshiori_development
+  queue:
+    <<: *default
+    database: hitoshiori_development_queue
+    migrations_paths: db/queue_migrate
+
+# Warning: The database defined as "test" will be erased and
+# re-generated from your development database when you run "rake".
+# Do not set this db to the same as development or production.
+test:
+  primary:
+    <<: *default
+    database: hitoshiori_test
+  queue:
+    <<: *default
+    database: hitoshiori_test_queue
+    migrations_paths: db/queue_migrate
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: <%= ENV.fetch("DB_NAME", "hitoshiori_production") %>
+    username: <%= ENV.fetch("DB_USERNAME", "hitoshiori") %>
+    password: <%= ENV["DB_PASSWORD"] %>
+  cache:
+    <<: *primary_production
+    database: <%= ENV.fetch("DB_NAME", "hitoshiori_production") %>_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: <%= ENV.fetch("DB_NAME", "hitoshiori_production") %>_queue
+    migrations_paths: db/queue_migrate

@@ -1,0 +1,71 @@
+# XcodeGen の定義ファイル。
+# .xcodeproj はここから生成する(git 管理はしない)。
+#   $ cd ios && xcodegen generate
+name: Hitoshiori
+
+options:
+  bundleIdPrefix: dev.ruribou
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  Hitoshiori:
+    type: application
+    platform: iOS
+    sources:
+      - path: Hitoshiori
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.ruribou.Hitoshiori
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        # 実機で動かすときは自分の Team ID を入れる
+        DEVELOPMENT_TEAM: ""
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: ひとしおり
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # 開発中に http://localhost:3000 の Rails を叩くため。
+        # ローカル宛の平文通信だけを許可する(任意の http を許可はしない)。
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        # 以降 MVP で使う予定の権限。文言は実装時に詰める。
+        NSSpeechRecognitionUsageDescription: 出会った人のメモを音声で記録するために使います。
+        NSMicrophoneUsageDescription: 出会った人のメモを音声で記録するために使います。
+
+  HitoshioriTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: HitoshioriTests
+    dependencies:
+      - target: Hitoshiori
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.ruribou.HitoshioriTests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Hitoshiori:
+    build:
+      targets:
+        Hitoshiori: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - HitoshioriTests

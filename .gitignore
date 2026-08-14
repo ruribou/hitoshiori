@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+
+# ローカル専用の compose override / 環境変数
+compose.override.yml
+.env

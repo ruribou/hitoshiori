@@ -1,0 +1,69 @@
+name: hitoshiori
+
+# backend / jobs は同じイメージ・同じ設定で動かすので共通定義を YAML アンカーで括る
+x-backend: &backend
+  build:
+    context: ./backend
+  image: hitoshiori-backend
+  environment:
+    RAILS_ENV: development
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_USERNAME: postgres
+    DB_PASSWORD: password
+    # binding.irb / debug gem をコンテナ内で使うため
+    RUBY_DEBUG_OPEN: "true"
+  volumes:
+    - ./backend:/hitoshiori
+    # gem はイメージから引き継がれる名前付きボリュームに置く(bind mount で隠れないように)
+    - bundle:/usr/local/bundle
+  tty: true
+  stdin_open: true
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+      TZ: Asia/Tokyo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    <<: *backend
+    command: bash -c "bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/up || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Solid Queue のワーカー。Redis は不要で、ジョブは Postgres の queue DB に載る。
+  jobs:
+    <<: *backend
+    command: bin/jobs start
+    depends_on:
+      db:
+        condition: service_healthy
+      # backend 側の db:prepare で solid_queue のテーブルが出来るのを待つ
+      backend:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  bundle:

@@ -1,0 +1,11 @@
+# XcodeGen が project.yml から生成するので追跡しない
+*.xcodeproj
+Support/Info.plist
+
+# Xcode
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+.swiftpm/
