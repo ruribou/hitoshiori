@@ -32,9 +32,11 @@ RSpec.describe Encounter, type: :model do
 
     it "再計算前に人物を行ロックする" do
       person
-      expect(Person).to receive(:lock).with("FOR NO KEY UPDATE").and_call_original
+      allow(Person).to receive(:lock).and_call_original
 
       encounter
+
+      expect(Person).to have_received(:lock).with("FOR NO KEY UPDATE")
     end
 
     it "削除後に残った記録から最終接触日時を再計算する" do

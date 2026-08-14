@@ -1,2 +1,34 @@
 inherit_gem:
   rubocop-rails-omakase: rubocop.yml
+
+require:
+  - ./rubocop/cop/hitoshiori/let_for_test_instance.rb
+
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+
+RSpec/ContextWording:
+  AllowedPatterns:
+    - 場合$
+
+RSpec/ExampleLength:
+  Max: 15
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+RSpec/MultipleExpectations:
+  Max: 5
+
+RSpec/MultipleMemoizedHelpers:
+  Max: 12
+
+Hitoshiori/LetForTestInstance:
+  Enabled: true
+  Include:
+    - spec/**/*_spec.rb

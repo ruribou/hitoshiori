@@ -4,21 +4,25 @@ RSpec.describe "People API", type: :request do
   describe "GET /api/v1/people" do
     context "接触済みと未接触の人物がいる場合" do
       let!(:older_person) { Person.create!(name: "以前会った人", note: "メモ1") }
-      let!(:older_encounter) do
+      let(:older_encounter) do
         older_person.encounters.create!(met_at: Time.zone.parse("2026-07-01 12:00:00"))
       end
       let(:same_time) { Time.zone.parse("2026-08-12 12:00:00") }
       let!(:tied_first) { Person.create!(name: "同時刻に会った人1", note: "メモ2") }
-      let!(:tied_first_encounter) { tied_first.encounters.create!(met_at: same_time) }
+      let(:tied_first_encounter) { tied_first.encounters.create!(met_at: same_time) }
       let!(:tied_second) { Person.create!(name: "同時刻に会った人2", note: "メモ3") }
-      let!(:tied_second_older_encounter) do
+      let(:tied_second_older_encounter) do
         tied_second.encounters.create!(met_at: Time.zone.parse("2026-08-10 12:00:00"))
       end
-      let!(:tied_second_latest_encounter) { tied_second.encounters.create!(met_at: same_time) }
+      let(:tied_second_latest_encounter) { tied_second.encounters.create!(met_at: same_time) }
       let!(:no_encounter_first) { Person.create!(name: "未接触の人1") }
       let!(:no_encounter_second) { Person.create!(name: "未接触の人2") }
+      let(:encounters) do
+        [ older_encounter, tied_first_encounter, tied_second_older_encounter, tied_second_latest_encounter ]
+      end
 
       it "接触日時とidの降順で人物と正しい接触回数を返し、未接触の人物を末尾に並べる" do
+        encounters
         get "/api/v1/people", as: :json
 
         expect(response).to have_http_status(:ok)
@@ -72,7 +76,7 @@ RSpec.describe "People API", type: :request do
     end
 
     context "人物数が増えた場合" do
-      let!(:initial_person) { Person.create!(name: "クエリ確認1") }
+      let(:initial_person) { Person.create!(name: "クエリ確認1") }
       let(:additional_people) do
         Array.new(3) do |index|
           Person.create!(name: "クエリ確認#{index + 2}").tap do |person|
@@ -82,6 +86,7 @@ RSpec.describe "People API", type: :request do
       end
 
       it "1回のSELECTで一覧と接触回数を取得する" do
+        initial_person
         expect(capture_select_queries { get "/api/v1/people", as: :json }.size).to eq(1)
 
         additional_people

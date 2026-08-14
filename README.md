@@ -103,6 +103,8 @@ docker compose logs -f backend                        # ログ
 docker compose exec backend bash                      # シェル
 docker compose exec backend bin/rails c               # コンソール
 docker compose exec backend bundle exec rspec          # テスト
+docker compose exec backend bundle exec rubocop        # Ruby・RSpecのLint
+docker compose exec backend bin/ci                     # backendの全検証
 docker compose exec backend bin/rails db:migrate
 docker compose exec backend bin/rails g model Person  # ジェネレータ
 ```
