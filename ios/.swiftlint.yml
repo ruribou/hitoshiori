@@ -1,0 +1,5 @@
+included:
+  - Hitoshiori
+  - HitoshioriTests
+
+strict: true

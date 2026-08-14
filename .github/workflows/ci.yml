@@ -18,9 +18,10 @@ jobs:
     outputs:
       rails: ${{ steps.filter.outputs.rails }}
       swift: ${{ steps.filter.outputs.swift }}
+      workflow: ${{ steps.filter.outputs.workflow }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -35,29 +36,63 @@ jobs:
 
           rails=false
           swift=false
+          workflow=false
 
           while IFS= read -r file; do
             case "$file" in
-              backend/*|compose.yml|.github/workflows/ci.yml)
+              backend/*|compose.yml|.github/workflows/*)
                 rails=true
                 ;;
             esac
 
             case "$file" in
-              ios/*|.github/workflows/ci.yml)
+              ios/*|.github/workflows/*)
                 swift=true
+                ;;
+            esac
+
+            case "$file" in
+              .github/workflows/*)
+                workflow=true
                 ;;
             esac
           done < "$RUNNER_TEMP/changed-files.txt"
 
-          echo "rails=$rails" >> "$GITHUB_OUTPUT"
-          echo "swift=$swift" >> "$GITHUB_OUTPUT"
+          {
+            echo "rails=$rails"
+            echo "swift=$swift"
+            echo "workflow=$workflow"
+          } >> "$GITHUB_OUTPUT"
 
           {
             echo "### CI targets"
             echo "- Rails: $rails"
             echo "- Swift: $swift"
+            echo "- GitHub Actions: $workflow"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  actions-lint:
+    name: Actions lint
+    needs: changes
+    if: needs.changes.outputs.workflow == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run actionlint with reviewdog
+        uses: reviewdog/action-actionlint@d63ba7532e0942965320cd8d73cbae4c7b3c5283 # v1.73.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          filter_mode: added
+          fail_level: error
 
   rails:
     name: Rails CI
@@ -65,6 +100,9 @@ jobs:
     if: needs.changes.outputs.rails == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: backend
@@ -90,12 +128,12 @@ jobs:
           --health-retries 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Set up Ruby and gems
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
           working-directory: backend
           bundler-cache: true
@@ -103,12 +141,26 @@ jobs:
       - name: Run Rails CI
         run: bin/ci
 
+      - name: Run RuboCop with reviewdog
+        uses: reviewdog/action-rubocop@b6d5e953a5fc0bf3ab65254e77730ea2174d6d6d # v2.22.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-pr-review
+          filter_mode: added
+          fail_level: warning
+          workdir: backend
+          skip_install: true
+          use_bundler: true
+
   swift:
     name: Swift CI
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-15
     timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
     defaults:
       run:
         working-directory: ios
@@ -117,12 +169,12 @@ jobs:
       HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install Swift tools
+        run: brew install swiftlint xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -134,3 +186,26 @@ jobs:
           -scheme Hitoshiori
           -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest'
           CODE_SIGNING_ALLOWED=NO
+
+      - name: Set up reviewdog
+        uses: reviewdog/action-setup@d8a7baabd7f3e8544ee4dbde3ee41d0011c3a93f # v1.5.0
+
+      - name: Run SwiftLint with reviewdog
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          swiftlint lint --no-cache --config .swiftlint.yml --reporter checkstyle > "$RUNNER_TEMP/swiftlint.xml" || true
+
+          if [[ ! -s "$RUNNER_TEMP/swiftlint.xml" ]]; then
+            echo "SwiftLint did not produce a report" >&2
+            exit 1
+          fi
+
+          reviewdog \
+            -f=checkstyle \
+            -name=SwiftLint \
+            -reporter=github-pr-review \
+            -filter-mode=added \
+            -fail-level=warning \
+            -tee \
+            < "$RUNNER_TEMP/swiftlint.xml"

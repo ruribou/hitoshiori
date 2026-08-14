@@ -34,4 +34,7 @@ group :development, :test do
 
   # Audits gems for known security defects (use config/bundler-audit.yml to ignore issues)
   gem "bundler-audit", require: false
+
+  # Rails標準のRubyスタイルをCIとローカルで揃える
+  gem "rubocop-rails-omakase", "~> 1.1", require: false
 end
