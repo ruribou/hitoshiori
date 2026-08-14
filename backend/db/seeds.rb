@@ -1,6 +1,6 @@
 seeded_at = Time.zone.now.change(usec: 0)
 
-tags_by_name = [ "ハッカソン", "STECH", "NxTENDO", "IDEACTIVE" ].index_with do |name|
+tags_by_name = [ "ハッカソン", "STECH", "NxTEND", "IDEACTIVE" ].index_with do |name|
   Tag.find_or_create_by!(name: name)
 end
 
