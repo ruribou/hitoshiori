@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "ReportFindings",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/write-review-memo.sh\"",
+            "timeout": 15,
+            "statusMessage": "レビュー結果を .claude/reviews/ へ書き出し中"
+          }
+        ]
+      }
+    ]
+  }
+}
