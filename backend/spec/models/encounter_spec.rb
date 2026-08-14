@@ -30,6 +30,13 @@ RSpec.describe Encounter, type: :model do
       expect(person.reload.last_encountered_at).to eq(latest_met_at)
     end
 
+    it "再計算前に人物を行ロックする" do
+      person
+      expect(Person).to receive(:lock).with("FOR NO KEY UPDATE").and_call_original
+
+      described_class.create!(person: person, met_at: Time.zone.parse("2026-08-10 12:00:00"))
+    end
+
     it "削除後に残った記録から最終接触日時を再計算する" do
       older = described_class.create!(person: person, met_at: Time.zone.parse("2026-07-01 12:00:00"))
       latest = described_class.create!(person: person, met_at: Time.zone.parse("2026-08-10 12:00:00"))

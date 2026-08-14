@@ -97,16 +97,26 @@ RSpec.describe "POST /api/v1/encounters", type: :request do
     )
   end
 
-  it "met_atを省略すると現在時刻を使う" do
-    encounter_params.delete(:met_at)
+  {
+    "未指定" => :omitted,
+    "null" => nil,
+    "空文字" => ""
+  }.each do |description, value|
+    it "met_atが#{description}なら現在時刻を使う" do
+      if value == :omitted
+        encounter_params.delete(:met_at)
+      else
+        encounter_params[:met_at] = value
+      end
 
-    travel_to(Time.zone.parse("2026-08-14 21:30:00")) do
-      request_encounter
+      travel_to(Time.zone.parse("2026-08-14 21:30:00")) do
+        request_encounter
+      end
+
+      expect(response).to have_http_status(:created)
+      expect(Encounter.last.met_at).to eq(Time.zone.parse("2026-08-14 21:30:00"))
+      expect(response.parsed_body.dig("encounter", "met_at")).to eq("2026-08-14T12:30:00Z")
     end
-
-    expect(response).to have_http_status(:created)
-    expect(Encounter.last.met_at).to eq(Time.zone.parse("2026-08-14 21:30:00"))
-    expect(response.parsed_body.dig("encounter", "met_at")).to eq("2026-08-14T12:30:00Z")
   end
 
   it "person_idとperson_nameの両方がなければ422を返す" do
@@ -128,12 +138,87 @@ RSpec.describe "POST /api/v1/encounters", type: :request do
     expect(response.parsed_body).to eq("errors" => { "base" => [ "not found" ] })
   end
 
+  it "encounterキーがなければ共通形式の400を返す" do
+    post "/api/v1/encounters", params: {}, as: :json
+
+    expect(response).to have_http_status(:bad_request)
+    expect(response.parsed_body).to eq("errors" => { "encounter" => [ "を入力してください" ] })
+  end
+
+  it "encounterがオブジェクトでなければ共通形式の400を返す" do
+    post "/api/v1/encounters", params: { encounter: "不正" }, as: :json
+
+    expect(response).to have_http_status(:bad_request)
+    expect(response.parsed_body).to eq("errors" => { "encounter" => [ "を入力してください" ] })
+  end
+
+  it "tag_namesが配列でなければ日本語の422を返す" do
+    encounter_params[:tag_names] = "ハッカソン"
+
+    expect { request_encounter }.not_to change(Person, :count)
+
+    expect(response).to have_http_status(:unprocessable_content)
+    expect(response.parsed_body).to eq("errors" => { "tag_names" => [ "は不正な値です" ] })
+  end
+
+  it "tag_namesに文字列以外が含まれていれば日本語の422を返す" do
+    encounter_params[:tag_names] = [ "ハッカソン", 1 ]
+
+    expect { request_encounter }.not_to change(Person, :count)
+
+    expect(response).to have_http_status(:unprocessable_content)
+    expect(response.parsed_body).to eq("errors" => { "tag_names" => [ "は不正な値です" ] })
+  end
+
+  it "タグの一意制約と競合しても既存タグを再利用する" do
+    encounter_params[:tag_names] = [ "競合タグ" ]
+    allow(Tag).to receive(:insert_all).and_wrap_original do |original, rows, **options|
+      Tag.create!(name: rows.first.fetch(:name))
+      original.call(rows, **options)
+    end
+
+    expect { request_encounter }.to change(Tag.where(name: "競合タグ"), :count).by(1)
+
+    expect(response).to have_http_status(:created)
+    expect(response.parsed_body.dig("encounter", "tags")).to eq(
+      [ { "id" => Tag.find_by!(name: "競合タグ").id, "name" => "競合タグ" } ]
+    )
+  end
+
+  it "タグ数にかかわらずタグと中間テーブルを一括で処理する" do
+    encounter_params[:tag_names] = %w[タグ1 タグ2 タグ3 タグ4 タグ5]
+    queries = []
+    subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+      queries << payload.fetch(:sql)
+    end
+
+    begin
+      request_encounter
+    ensure
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+    end
+
+    expect(response).to have_http_status(:created)
+    expect(queries.grep(/\A(?:SELECT|INSERT).*"tags"/).size).to eq(2)
+    expect(queries.grep(/\AINSERT.*"encounter_tags"/).size).to eq(1)
+  end
+
   it "出会いの保存に失敗したら新しい人物も残さない" do
     encounter_params[:met_at] = "不正な日時"
 
     expect { request_encounter }.not_to change(Person, :count)
 
     expect(response).to have_http_status(:unprocessable_content)
-    expect(response.parsed_body.fetch("errors")).to include("met_at")
+    expect(response.parsed_body).to eq("errors" => { "met_at" => [ "は不正な値です" ] })
+  end
+
+  it "想定外のモデル保存失敗を422として扱わない" do
+    invalid_person = Person.new
+    invalid_person.validate
+    allow(Person).to receive(:create!).and_raise(ActiveRecord::RecordInvalid.new(invalid_person))
+
+    request_encounter
+
+    expect(response).to have_http_status(:internal_server_error)
   end
 end

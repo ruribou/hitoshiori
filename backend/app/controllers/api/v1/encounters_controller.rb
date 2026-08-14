@@ -2,14 +2,18 @@ module Api
   module V1
     class EncountersController < ApplicationController
       def create
-        attributes = encounter_params
-        return render_validation_errors(person_name: [ "を入力してください" ]) unless person_specified?(attributes)
+        form = Encounters::CreateForm.new(encounter_params)
+        return render_validation_errors(form.errors.to_hash) unless form.valid?
 
         encounter, tags = ActiveRecord::Base.transaction do
-          person = find_or_create_person(attributes)
-          encounter = person.encounters.create!(encounter_attributes(attributes))
-          tags = find_or_create_tags(attributes[:tag_names])
-          encounter.tags.concat(tags)
+          person = find_or_create_person(form)
+          encounter = person.encounters.create!(
+            met_at: form.resolved_met_at,
+            topic: form.topic,
+            memo: form.memo
+          )
+          tags = find_or_create_tags(form.normalized_tag_names)
+          create_encounter_tags(encounter, tags)
 
           [ encounter, tags ]
         end
@@ -20,39 +24,42 @@ module Api
       private
 
       def encounter_params
-        params.require(:encounter).permit(:person_id, :person_name, :met_at, :topic, :memo, tag_names: [])
-      end
+        raw_parameters = params.require(:encounter)
+        raise ActionController::ParameterMissing.new(:encounter) unless raw_parameters.is_a?(ActionController::Parameters)
 
-      def person_specified?(attributes)
-        attributes[:person_id].present? || attributes[:person_name].present?
-      end
-
-      def find_or_create_person(attributes)
-        return Person.find(attributes[:person_id]) if attributes[:person_id].present?
-
-        Person.create!(name: attributes[:person_name])
-      end
-
-      def encounter_attributes(attributes)
         {
-          met_at: attributes.key?(:met_at) ? attributes[:met_at] : Time.current,
-          topic: attributes[:topic],
-          memo: attributes[:memo]
+          person_id: raw_parameters[:person_id],
+          person_name: raw_parameters[:person_name],
+          met_at: raw_parameters[:met_at],
+          topic: raw_parameters[:topic],
+          memo: raw_parameters[:memo],
+          tag_names: raw_parameters.key?(:tag_names) ? raw_parameters[:tag_names] : []
         }
       end
 
-      def find_or_create_tags(tag_names)
-        normalize_tag_names(tag_names).map do |name|
-          Tag.find_or_create_by!(name: name)
-        end
+      def find_or_create_person(form)
+        return Person.find(form.person_id) if form.person_id.present?
+
+        Person.create!(name: form.person_name)
       end
 
-      def normalize_tag_names(tag_names)
-        Array(tag_names).filter_map { |name| name.to_s.strip.presence }.uniq
+      def find_or_create_tags(names)
+        return [] if names.empty?
+
+        Tag.insert_all(names.map { |name| { name: name } }, unique_by: :index_tags_on_name)
+        tags_by_name = Tag.where(name: names).index_by(&:name)
+        names.map { |name| tags_by_name.fetch(name) }
+      end
+
+      def create_encounter_tags(encounter, tags)
+        return if tags.empty?
+
+        rows = tags.map { |tag| { encounter_id: encounter.id, tag_id: tag.id } }
+        EncounterTag.insert_all(rows, unique_by: :index_encounter_tags_on_encounter_id_and_tag_id)
       end
 
       def encounter_response(encounter, tags)
-        person = encounter.person.reload
+        person = encounter.person
 
         {
           encounter: {

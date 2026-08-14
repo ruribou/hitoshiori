@@ -1,6 +1,6 @@
 class ApplicationController < ActionController::API
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
-  rescue_from ActiveRecord::RecordInvalid, with: :render_record_invalid
+  rescue_from ActionController::ParameterMissing, with: :render_parameter_missing
 
   private
 
@@ -8,11 +8,11 @@ class ApplicationController < ActionController::API
     render json: { errors: { base: [ "not found" ] } }, status: :not_found
   end
 
-  def render_record_invalid(error)
-    render_validation_errors(error.record.errors.to_hash)
+  def render_parameter_missing(error)
+    render json: { errors: { error.param => [ I18n.t("errors.messages.blank") ] } }, status: :bad_request
   end
 
   def render_validation_errors(errors)
-    render json: { errors: errors }, status: :unprocessable_entity
+    render json: { errors: errors }, status: :unprocessable_content
   end
 end

@@ -33,6 +33,8 @@ module Hitoshiori
     # in config/environments, which are processed later.
     #
     config.time_zone = "Tokyo"
+    config.i18n.default_locale = :ja
+    config.action_dispatch.rescue_responses["ActiveRecord::RecordInvalid"] = :internal_server_error
     # config.eager_load_paths << Rails.root.join("extras")
 
     # Only loads a smaller set of middleware suitable for API only apps.
