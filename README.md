@@ -102,7 +102,7 @@ docker compose down -v                                # DB ごと破棄
 docker compose logs -f backend                        # ログ
 docker compose exec backend bash                      # シェル
 docker compose exec backend bin/rails c               # コンソール
-docker compose exec backend bin/rails test            # テスト
+docker compose exec backend bundle exec rspec          # テスト
 docker compose exec backend bin/rails db:migrate
 docker compose exec backend bin/rails g model Person  # ジェネレータ
 ```
