@@ -22,13 +22,17 @@ Rails 8 API(backend)+ SwiftUI(ios)のモノレポ。
 ## 作業規約
 
 - 実装は `docs/tasks/` のタスク単位で進める。1 タスク = 1 PR が基本
+- 番号付き実装タスクは、PR不要と明示されない限り、受け入れ条件の確認後に
+  commit・push・PR作成まで自動で行う
+- 未マージの依存タスクを土台にする場合は、その依存PRのブランチをbaseにした
+  Stacked PRとして作成する。自動マージはしない
 - 着手時・完了時に `docs/tasks/README.md` の状態欄(未着手 / 進行中 / 完了)を更新する
 - タスクファイルの「受け入れ条件」を全て満たしてから完了にする。満たせないものが
   あれば理由をタスクファイルに追記する
 - API のエンドポイントを追加・変更したら、同じ PR で `docs/api.md` を更新する
 - マイグレーションを追加したら、同じ PR で `docs/schema.md` を更新する
 - 仕様を変えたくなったら、docs を先に直してから実装する(実装に合わせて docs を後追いさせない)
-- backend のコードを書いたら必ずテストを書く(Minitest)
+- backend のコードを書いたら必ずテストを書く(RSpec)
 - コミットメッセージ・コメント・ドキュメントは日本語
 
 ## コマンド
@@ -37,7 +41,7 @@ Rails 8 API(backend)+ SwiftUI(ios)のモノレポ。
 
 ```bash
 docker compose up -d                                  # 起動(db / backend / jobs)
-docker compose exec backend bin/rails test            # テスト
+docker compose exec backend bundle exec rspec          # テスト
 docker compose exec backend bin/rails db:migrate
 docker compose exec backend bin/rails g model Person  # ジェネレータ
 docker compose exec backend bin/rails c               # コンソール

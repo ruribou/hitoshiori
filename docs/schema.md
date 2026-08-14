@@ -73,6 +73,7 @@ erDiagram
 | `name` | string | null: false, unique index | `ハッカソン` `STECH` など。`#` は保存しない |
 
 - タグは encounter 作成時に名前で find_or_create する(タグ管理画面は作らない)
+- `created_at` / `updated_at` は持たない
 
 ### encounter_tags
 
@@ -82,6 +83,7 @@ erDiagram
 | `tag_id` | bigint | null: false, FK |
 
 - 複合 unique index: `[encounter_id, tag_id]`
+- `created_at` / `updated_at` は持たない
 
 ### reminders
 

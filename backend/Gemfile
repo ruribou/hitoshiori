@@ -37,4 +37,7 @@ group :development, :test do
 
   # Rails標準のRubyスタイルをCIとローカルで揃える
   gem "rubocop-rails-omakase", "~> 1.1", require: false
+
+  # backendのテスト基盤
+  gem "rspec-rails", "~> 8.0"
 end
