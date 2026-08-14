@@ -1,23 +1,21 @@
 # ひとしおり
 
-出会った人を最小の手間で記録して、思い出すほうはアプリ側から声をかけてくる人脈想起アプリ。
+出会った人を最小の手間で記録し、思い出すきっかけをアプリ側から提示する人脈想起アプリ。
 
-学生コミュニティやハッカソンで人に会う機会は多いのに、名前も話した内容も後から出てこない。
-これを「覚える努力」ではなく「思い出させる仕組み」で解きたい。
+学生コミュニティやハッカソンでは人に会う機会が多い一方、名前も話した内容も後から出てこない。
+「覚える努力」ではなく「思い出させる仕組み」で解決する。
 
-人に栞を挟んでおいて、必要なときにそのページが開かれる。名前はそこから。
+人に栞を挟んでおき、必要なときにそのページが開かれる。名前の由来。
 
 ## 設計方針
 
-入力の摩擦をできるだけゼロに近づける。起動して即1画面、名前（あだ名でもいい）とワンタップのタグ、あとは音声メモだけ。
-
-想起は自動でやる。バッチでしばらく会っていない人を拾って、1日1人だけ通知する。
-
-精度より継続を優先する。曖昧な名前でも登録できて後から直せるようにして、記録忘れを煽る通知はしない。
+- 入力摩擦の最小化 — 1 画面で完結。名前（あだ名可）+ ワンタップのタグ + 音声メモ
+- 想起の自動化 — しばらく会っていない人物をバッチ抽出し、1 日 1 人に絞って通知
+- 継続性の優先 — 曖昧な名前でも登録可、後から修正可能。記録忘れは通知しない
 
 ## 構成
 
-モノレポにしている。API 仕様のズレに気づきやすいのと、1セッションで backend と ios の両方に手を入れられるので。
+モノレポ構成。API 仕様のズレを検知しやすく、1 セッションで backend / ios 双方に手を入れられる。
 
 ```
 hitoshiori/
@@ -31,29 +29,31 @@ hitoshiori/
 
 ### 技術スタック
 
-- Backend: Ruby 4.0 / Rails 8.1 (API mode) / PostgreSQL 17
-- ジョブ: Solid Queue（Redis は使わない。ジョブは Postgres の queue DB に載る）
-- iOS: Swift 6 / SwiftUI / iOS 18.0+
-- 開発環境: Docker Compose / XcodeGen
+| 領域 | 技術 |
+|---|---|
+| Backend | Ruby 4.0 / Rails 8.1 (API mode) / PostgreSQL 17 |
+| ジョブ | Solid Queue（Redis 不使用。ジョブは Postgres の queue DB に格納） |
+| iOS | Swift 6 / SwiftUI / iOS 18.0+ |
+| 開発環境 | Docker Compose / XcodeGen |
 
-ジョブキューは Sidekiq ではなく Solid Queue にした。Redis というミドルウェアを1つ増やさずに済むし、
-想起バッチの定期実行も `config/recurring.yml` だけで書けるので。
+ジョブキューは Sidekiq ではなく Solid Queue を採用。Redis の追加が不要で、
+想起バッチの定期実行も `config/recurring.yml` で完結するため。
 
 ## セットアップ
 
 ### backend
 
-必要なのは Docker だけ。ホストに Ruby や PostgreSQL は要らない。
+前提: Docker のみ（ホストへの Ruby / PostgreSQL のインストールは不要）
 
 ```bash
 docker compose up -d
 ```
 
-初回はイメージのビルドが走る。起動すると以下が立ち上がる。
+初回はイメージのビルドが走る。起動するコンテナ:
 
-| コンテナ | 中身 |
+| コンテナ | 内容 |
 |---|---|
-| `hitoshiori-backend-1` | `bin/rails db:prepare` のあと Puma を :3000 で起動 |
+| `hitoshiori-backend-1` | `bin/rails db:prepare` 後に Puma を :3000 で起動 |
 | `hitoshiori-jobs-1` | `bin/jobs`（Solid Queue の supervisor / worker / dispatcher） |
 | `hitoshiori-db-1` | PostgreSQL 17 |
 
@@ -61,11 +61,11 @@ docker compose up -d
 
 ```bash
 curl -i http://localhost:3000/up   # => 200
-docker compose ps                  # backend が healthy になっていること
+docker compose ps                  # backend が healthy
 ```
 
-DB は development / test それぞれでアプリ本体と queue を分けてある。
-Solid Queue のテーブルがアプリのスキーマに混ざらないし、`db:reset` でジョブ用テーブルを巻き込まずに済む。
+DB は development / test それぞれでアプリ本体と queue を分離。
+Solid Queue のテーブルがアプリのスキーマに混ざらず、`db:reset` の巻き込みも防げる。
 
 | DB | 用途 |
 |---|---|
@@ -81,11 +81,11 @@ xcodegen generate          # project.yml から Hitoshiori.xcodeproj を生成
 open Hitoshiori.xcodeproj
 ```
 
-`.xcodeproj` は生成物なので git 管理していない。ターゲット構成やビルド設定を変えるときは
-Xcode の GUI ではなく `ios/project.yml` を編集して `xcodegen generate` をやり直す。
+`.xcodeproj` は生成物のため git 管理外。ターゲット構成やビルド設定の変更は
+`ios/project.yml` を編集して `xcodegen generate` を再実行する。
 
-シミュレータからは `http://localhost:3000` でホストの backend に届く。
-起動直後の画面が backend のヘルスチェック結果を出すので、そのまま疎通確認に使える。
+シミュレータからは `http://localhost:3000` でホストの backend に到達。
+起動直後の画面が backend のヘルスチェック結果を表示するため、そのまま疎通確認に使える。
 
 ## よく使うコマンド
 
@@ -103,8 +103,8 @@ docker compose exec backend bin/rails db:migrate
 docker compose exec backend bin/rails g model Person  # ジェネレータ
 ```
 
-Gemfile を編集したときはコンテナを再起動するだけでいい（起動時に `bundle check` して差分があれば入れ直す）。
-gem はイメージではなく名前付きボリュームにあるので、イメージの再ビルドは要らない。
+Gemfile 変更時はコンテナの再起動のみ（起動時に `bundle check` し、差分があれば再インストール）。
+gem はイメージではなく名前付きボリュームに配置しているため、イメージの再ビルドは不要。
 
 ```bash
 docker compose restart backend jobs
@@ -118,13 +118,3 @@ xcodegen generate
 xcodebuild build -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
 xcodebuild test  -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
-
-## 実装状況
-
-環境構築まで。ここからが MVP の実装。
-
-- [x] モノレポ / Docker Compose / Rails 8 + Solid Queue
-- [x] SwiftUI プロジェクト（XcodeGen）
-- [ ] Encounter 記録機能（音声 or ワンタップ）
-- [ ] 1日1人の想起通知バッチ
-- [ ] 通知（APNs）、カレンダー連携（EventKit）、Live Activities
