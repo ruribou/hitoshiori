@@ -19,10 +19,14 @@
 
 ```
 hitoshiori/
+├── AGENTS.md         # コーディングエージェント向けの作業規約(正本)
+├── CLAUDE.md         # Claude Code 用。@AGENTS.md を読み込むだけ
 ├── compose.yml       # ローカル開発環境(db / backend / jobs)
 ├── backend/          # Rails 8 API + Solid Queue
 ├── ios/              # SwiftUI (XcodeGen で .xcodeproj を生成)
 └── docs/
+    ├── product.md    # 課題・設計原則・MVP スコープ(企画の正本)
+    ├── plan.md       # 全体ロードマップと決定事項ログ
     ├── api.md        # エンドポイント仕様
     └── schema.md     # DB 設計
 ```
