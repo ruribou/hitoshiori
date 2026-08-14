@@ -165,7 +165,7 @@ jobs:
     name: Swift CI
     needs: changes
     if: needs.changes.outputs.swift == 'true'
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     permissions:
       contents: read
@@ -174,7 +174,7 @@ jobs:
       run:
         working-directory: ios
     env:
-      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
       HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
       - name: Check out repository
@@ -193,7 +193,7 @@ jobs:
           xcodebuild test
           -project Hitoshiori.xcodeproj
           -scheme Hitoshiori
-          -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest'
+          -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.5'
           CODE_SIGNING_ALLOWED=NO
 
       - name: Set up reviewdog
