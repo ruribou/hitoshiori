@@ -4,6 +4,13 @@ class ApplicationController < ActionController::API
 
   private
 
+  def require_object_param(key)
+    raw_parameters = params.require(key)
+    raise ActionController::ParameterMissing.new(key) unless raw_parameters.is_a?(ActionController::Parameters)
+
+    raw_parameters
+  end
+
   def render_not_found
     render json: { errors: { base: [ "not found" ] } }, status: :not_found
   end

@@ -24,8 +24,7 @@ module Api
       private
 
       def encounter_params
-        raw_parameters = params.require(:encounter)
-        raise ActionController::ParameterMissing.new(:encounter) unless raw_parameters.is_a?(ActionController::Parameters)
+        raw_parameters = require_object_param(:encounter)
 
         {
           person_id: raw_parameters[:person_id],
@@ -62,18 +61,13 @@ module Api
         person = encounter.person
 
         {
-          encounter: {
-            id: encounter.id,
-            met_at: encounter.met_at.utc.iso8601,
-            topic: encounter.topic,
-            memo: encounter.memo,
-            tags: tags.map { |tag| { id: tag.id, name: tag.name } },
+          encounter: EncounterPresenter.serialize(encounter, tags: tags).merge(
             person: {
               id: person.id,
               name: person.name,
-              last_encountered_at: person.last_encountered_at.utc.iso8601
+              last_encountered_at: TimestampPresenter.serialize(person.last_encountered_at)
             }
-          }
+          )
         }
       end
     end

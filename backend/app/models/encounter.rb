@@ -2,7 +2,7 @@ class Encounter < ApplicationRecord
   belongs_to :person
 
   has_many :encounter_tags, dependent: :destroy
-  has_many :tags, through: :encounter_tags
+  has_many :tags, -> { order(:name) }, through: :encounter_tags
 
   validates :met_at, presence: true
 
