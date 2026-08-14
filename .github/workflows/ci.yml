@@ -40,13 +40,13 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              backend/*|compose.yml|.github/workflows/*)
+              backend/*|compose.yml)
                 rails=true
                 ;;
             esac
 
             case "$file" in
-              ios/*|.github/workflows/*)
+              ios/*)
                 swift=true
                 ;;
             esac
