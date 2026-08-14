@@ -4,7 +4,7 @@ module Api
       def index
         tags = Tag.order(:name)
 
-        render json: { tags: tags.map { |tag| { id: tag.id, name: tag.name } } }
+        render json: { tags: TagPresenter.serialize_collection(tags) }
       end
     end
   end

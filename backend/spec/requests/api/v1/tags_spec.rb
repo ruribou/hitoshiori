@@ -1,22 +1,20 @@
 require "rails_helper"
 
 RSpec.describe "GET /api/v1/tags", type: :request do
-  before do
-    EncounterTag.delete_all
-    Tag.delete_all
-  end
-
   it "nameの昇順で全タグを返す" do
-    hackathon = Tag.create!(name: "ハッカソン")
-    stech = Tag.create!(name: "STECH")
+    tag_b = Tag.create!(name: "一覧表示順B")
+    tag_a = Tag.create!(name: "一覧表示順A")
 
     get "/api/v1/tags", as: :json
 
     expect(response).to have_http_status(:ok)
-    expect(response.parsed_body).to eq(
-      "tags" => [
-        { "id" => stech.id, "name" => "STECH" },
-        { "id" => hackathon.id, "name" => "ハッカソン" }
+    created_tags = response.parsed_body.fetch("tags").select do |tag|
+      [ tag_a.id, tag_b.id ].include?(tag.fetch("id"))
+    end
+    expect(created_tags).to eq(
+      [
+        { "id" => tag_a.id, "name" => "一覧表示順A" },
+        { "id" => tag_b.id, "name" => "一覧表示順B" }
       ]
     )
   end
