@@ -24,7 +24,7 @@ people = [
     name: "れんさん",
     note: "NxTENDOの交流会で会った",
     encounters: [
-      { days_ago: 40, topic: "ゲーム制作", memo: "個人制作について聞いた", tags: [ "NxTENDO" ] }
+      { days_ago: 40, topic: "ゲーム制作", memo: "個人制作について聞いた", tags: [ "NxTEND" ] }
     ]
   },
   {
