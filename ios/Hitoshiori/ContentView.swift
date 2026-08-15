@@ -1,70 +1,162 @@
 import SwiftUI
 
-/// 環境構築の疎通確認用の仮画面。
-/// 実装が始まったら「今日誰と会った?」の記録画面に置き換える。
 struct ContentView: View {
-    private enum Status {
-        case checking
-        case reachable(Int)
-        case unreachable(String)
-    }
-
-    @State private var status: Status = .checking
-
-    private let client = APIClient.development
+    @State private var viewModel = RecordViewModel()
 
     var body: some View {
-        VStack(spacing: 24) {
-            VStack(spacing: 8) {
-                Text("ひとしおり")
-                    .font(.largeTitle.bold())
-                Text("環境構築の疎通確認用の仮画面")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Label("今日、誰と会った？", systemImage: "person.crop.circle.badge.plus")
+                            .font(.title3.weight(.semibold))
+                        Spacer()
+                        backendStatusLabel
+                    }
 
-            statusLabel
+                    TextField("名前・あだ名", text: Binding(
+                        get: { viewModel.name },
+                        set: { viewModel.updateName($0) }
+                    ))
+                    .textContentType(.name)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
 
-            Button("再チェック") {
-                Task { await check() }
+                    if viewModel.selectedPerson != nil {
+                        Label("既存の人物として記録します", systemImage: "person.fill.checkmark")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else if !viewModel.suggestions.isEmpty {
+                        ForEach(viewModel.suggestions, id: \.id) { person in
+                            Button {
+                                viewModel.select(person: person)
+                            } label: {
+                                HStack {
+                                    Text(person.name)
+                                    Spacer()
+                                    Text("既存の人物")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .foregroundStyle(.primary)
+                        }
+                    }
+                }
+
+                Section("タグ") {
+                    if viewModel.tags.isEmpty, !viewModel.isLoading {
+                        Text("よく使うタグは保存後にここに並びます")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 82), spacing: 8)],
+                            alignment: .leading,
+                            spacing: 8
+                        ) {
+                            ForEach(viewModel.tags, id: \.id) { tag in
+                                TagChip(
+                                    name: tag.name,
+                                    isSelected: viewModel.selectedTagNames.contains(tag.name)
+                                ) {
+                                    viewModel.toggleTag(named: tag.name)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    TextField("新しいタグを1つ追加", text: $viewModel.newTagName)
+                        .autocorrectionDisabled()
+                }
+
+                Section("話したこと") {
+                    TextField("話題（任意）", text: $viewModel.topic)
+                    TextEditor(text: $viewModel.memo)
+                        .frame(minHeight: 88)
+                        .accessibilityLabel("メモ（任意）")
+                }
+
+                if let errorMessage = viewModel.errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+
+                Section {
+                    Button {
+                        Task { await viewModel.save() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if viewModel.isSaving {
+                                ProgressView()
+                                    .padding(.trailing, 6)
+                            }
+                            Text("記録する")
+                                .fontWeight(.semibold)
+                            Spacer()
+                        }
+                    }
+                    .disabled(!viewModel.canSave || viewModel.isSaving)
+                }
             }
-            .buttonStyle(.borderedProminent)
+            .overlay(alignment: .top) {
+                if viewModel.didSave {
+                    Label("記録しました", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.thinMaterial, in: Capsule())
+                        .padding(.top, 8)
+                        .transition(.opacity)
+                }
+            }
+            .task { await viewModel.load() }
         }
-        .padding()
-        .task { await check() }
     }
 
     @ViewBuilder
-    private var statusLabel: some View {
-        switch status {
+    private var backendStatusLabel: some View {
+        switch viewModel.backendStatus {
         case .checking:
-            Label("backend に接続中…", systemImage: "ellipsis.circle")
+            Image(systemName: "ellipsis.circle")
                 .foregroundStyle(.secondary)
-        case .reachable(let code):
-            Label("backend 到達 OK (HTTP \(code))", systemImage: "checkmark.circle.fill")
+                .accessibilityLabel("backend に接続中")
+        case .reachable:
+            Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
-        case .unreachable(let message):
-            VStack(spacing: 4) {
-                Label("backend に届きません", systemImage: "xmark.circle.fill")
-                    .foregroundStyle(.red)
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Text("`docker compose up -d` を確認してください")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+                .accessibilityLabel("backend に接続済み")
+        case .unreachable:
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.red)
+                .accessibilityLabel("backend に未接続")
         }
     }
+}
 
-    private func check() async {
-        status = .checking
-        do {
-            status = .reachable(try await client.health())
-        } catch {
-            status = .unreachable(error.localizedDescription)
+private struct TagChip: View {
+    let name: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(name)
+                .font(.subheadline)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? .white : .primary)
+        .background(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemFill), in: Capsule())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
