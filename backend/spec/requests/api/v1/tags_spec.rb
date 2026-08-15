@@ -1,10 +1,10 @@
 require "rails_helper"
 
 RSpec.describe "GET /api/v1/tags", type: :request do
-  it "nameの昇順で全タグを返す" do
-    tag_b = Tag.create!(name: "一覧表示順B")
-    tag_a = Tag.create!(name: "一覧表示順A")
+  let!(:tag_b) { Tag.create!(name: "一覧表示順B") }
+  let!(:tag_a) { Tag.create!(name: "一覧表示順A") }
 
+  it "nameの昇順で全タグを返す" do
     get "/api/v1/tags", as: :json
 
     expect(response).to have_http_status(:ok)

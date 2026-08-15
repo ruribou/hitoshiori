@@ -33,6 +33,7 @@ Rails 8 API(backend)+ SwiftUI(ios)のモノレポ。
 - マイグレーションを追加したら、同じ PR で `docs/schema.md` を更新する
 - 仕様を変えたくなったら、docs を先に直してから実装する(実装に合わせて docs を後追いさせない)
 - backend のコードを書いたら必ずテストを書く(RSpec)
+- RSpec のテスト用インスタンスは `let` / `let!` で定義し、example 内で直接生成しない
 - コミットメッセージ・コメント・ドキュメントは日本語
 
 ## コマンド
@@ -42,6 +43,8 @@ Rails 8 API(backend)+ SwiftUI(ios)のモノレポ。
 ```bash
 docker compose up -d                                  # 起動(db / backend / jobs)
 docker compose exec backend bundle exec rspec          # テスト
+docker compose exec backend bundle exec rubocop        # Ruby・RSpecのLint
+docker compose exec backend bin/ci                     # backendの全検証
 docker compose exec backend bin/rails db:migrate
 docker compose exec backend bin/rails g model Person  # ジェネレータ
 docker compose exec backend bin/rails c               # コンソール

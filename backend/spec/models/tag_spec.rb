@@ -2,19 +2,27 @@ require "rails_helper"
 
 RSpec.describe Tag, type: :model do
   describe "バリデーション" do
-    it "名前が空なら保存できない" do
-      tag = described_class.new(name: "")
+    let(:tag) { described_class.new(name: name) }
 
-      expect(tag).not_to be_valid
-      expect(tag.errors.of_kind?(:name, :blank)).to be(true)
+    context "名前が空の場合" do
+      let(:name) { "" }
+
+      it "保存できない" do
+        expect(tag).not_to be_valid
+        expect(tag.errors.of_kind?(:name, :blank)).to be(true)
+      end
     end
 
-    it "同じ名前を重複して保存できない" do
-      described_class.create!(name: "RSpec重複確認用")
-      duplicate = described_class.new(name: "RSpec重複確認用")
+    context "同じ名前が保存済みの場合" do
+      let(:name) { "RSpec重複確認用" }
+      let(:existing_tag) { described_class.create!(name: name) }
 
-      expect(duplicate).not_to be_valid
-      expect(duplicate.errors.of_kind?(:name, :taken)).to be(true)
+      it "重複して保存できない" do
+        existing_tag
+
+        expect(tag).not_to be_valid
+        expect(tag.errors.of_kind?(:name, :taken)).to be(true)
+      end
     end
   end
 end

@@ -40,4 +40,7 @@ group :development, :test do
 
   # backendのテスト基盤
   gem "rspec-rails", "~> 8.0"
+
+  # RSpec固有のスタイルをRuboCopで検査する
+  gem "rubocop-rspec", "~> 3.9", require: false
 end
