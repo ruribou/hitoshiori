@@ -3,6 +3,32 @@ import UIKit
 
 @MainActor
 struct ContentView: View {
+    private enum Tab {
+        case record
+        case people
+    }
+
+    @State private var selectedTab = Tab.record
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            RecordView()
+                .tabItem {
+                    Label("記録", systemImage: "square.and.pencil")
+                }
+                .tag(Tab.record)
+
+            PeopleListView()
+                .tabItem {
+                    Label("人物", systemImage: "person.2")
+                }
+                .tag(Tab.people)
+        }
+    }
+}
+
+@MainActor
+private struct RecordView: View {
     @State private var viewModel = RecordViewModel()
     @State private var transcriber: any SpeechTranscribing
     @Environment(\.scenePhase) private var scenePhase
