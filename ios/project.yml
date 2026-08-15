@@ -42,9 +42,9 @@ targets:
         # ローカル宛の平文通信だけを許可する(任意の http を許可はしない)。
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # 以降 MVP で使う予定の権限。文言は実装時に詰める。
-        NSSpeechRecognitionUsageDescription: 出会った人のメモを音声で記録するために使います。
-        NSMicrophoneUsageDescription: 出会った人のメモを音声で記録するために使います。
+        # 音声メモ入力で使用する権限。音声データはひとしおりのサーバーへ送信・保存しない。
+        NSSpeechRecognitionUsageDescription: 話した内容を文字に変換するために音声認識を使います。
+        NSMicrophoneUsageDescription: 出会った人のメモを声で入力するためにマイクを使います。
 
   HitoshioriTests:
     type: bundle.unit-test

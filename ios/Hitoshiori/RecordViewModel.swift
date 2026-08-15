@@ -41,6 +41,7 @@ final class RecordViewModel {
 
     private let client: any RecordAPIClient
     private(set) var selectedPerson: Person?
+    private var memoBeforeTranscription: String?
 
     init(client: any RecordAPIClient = APIClient.development) {
         self.client = client
@@ -108,6 +109,51 @@ final class RecordViewModel {
         } else {
             selectedTagNames.insert(name)
         }
+    }
+
+    func beginMemoTranscription() {
+        memoBeforeTranscription = memo
+    }
+
+    func updateMemo(withTranscription transcript: String) {
+        guard let memoBeforeTranscription else { return }
+
+        if memoBeforeTranscription.isEmpty || transcript.isEmpty {
+            memo = memoBeforeTranscription + transcript
+        } else {
+            memo = "\(memoBeforeTranscription)\n\(transcript)"
+        }
+    }
+
+    func endMemoTranscription() {
+        memoBeforeTranscription = nil
+    }
+
+    func startVoiceMemo(using transcriber: any SpeechTranscribing) async {
+        beginMemoTranscription()
+        await transcriber.start()
+
+        if !transcriber.isRecording {
+            endMemoTranscription()
+        }
+    }
+
+    func finishVoiceMemo(with transcript: String) {
+        updateMemo(withTranscription: transcript)
+        endMemoTranscription()
+    }
+
+    func stopVoiceMemo(using transcriber: any SpeechTranscribing) async {
+        await transcriber.stopAndWaitForFinalResult()
+        finishVoiceMemo(with: transcriber.transcript)
+    }
+
+    func save(using transcriber: any SpeechTranscribing) async {
+        if transcriber.isRecording || transcriber.isFinishing {
+            await stopVoiceMemo(using: transcriber)
+        }
+
+        await save()
     }
 
     func save() async {
@@ -187,6 +233,7 @@ final class RecordViewModel {
         newTagName = ""
         selectedPerson = nil
         selectedTagNames = []
+        endMemoTranscription()
     }
 
     private func normalized(_ value: String) -> String {
