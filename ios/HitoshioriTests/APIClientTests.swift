@@ -188,7 +188,32 @@ struct APIClientTests {
         )
 
         #expect(response.reminder?.remindOn == "2026-08-14")
-        #expect(response.reminder?.person.lastEncounter.tags.first?.name == "ハッカソン")
+        #expect(response.reminder?.person.lastEncounter?.tags.first?.name == "ハッカソン")
+    }
+
+    @Test
+    func decodesTodayReminderWithoutEncounter() throws {
+        let response = try decode(
+            ReminderResponse.self,
+            from: #"""
+            {
+              "reminder": {
+                "id": 1,
+                "remind_on": "2026-08-14",
+                "person": {
+                  "id": 1,
+                  "name": "たなか",
+                  "note": "",
+                  "last_encountered_at": null,
+                  "last_encounter": null
+                }
+              }
+            }
+            """#
+        )
+
+        #expect(response.reminder?.person.lastEncounteredAt == nil)
+        #expect(response.reminder?.person.lastEncounter == nil)
     }
 
     @Test

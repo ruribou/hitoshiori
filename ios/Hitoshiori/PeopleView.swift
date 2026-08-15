@@ -3,14 +3,17 @@ import SwiftUI
 @MainActor
 struct PeopleListView: View {
     @State private var store: PeopleStore
+    @Binding private var presentedPersonID: Int?
 
     private let client: any PeopleAPIClient
 
     init(
         store: PeopleStore = PeopleStore(),
-        client: any PeopleAPIClient = APIClient.development
+        client: any PeopleAPIClient = APIClient.development,
+        presentedPersonID: Binding<Int?> = .constant(nil)
     ) {
         _store = State(initialValue: store)
+        _presentedPersonID = presentedPersonID
         self.client = client
     }
 
@@ -18,7 +21,9 @@ struct PeopleListView: View {
         NavigationStack {
             List {
                 ForEach(store.people, id: \.id) { person in
-                    NavigationLink(value: person.id) {
+                    NavigationLink {
+                        PersonDetailView(personID: person.id, client: client, peopleStore: store)
+                    } label: {
                         PersonRow(person: person)
                     }
                 }
@@ -41,7 +46,7 @@ struct PeopleListView: View {
             .navigationTitle("人物")
             .refreshable { await store.load() }
             .task { await store.load() }
-            .navigationDestination(for: Int.self) { personID in
+            .navigationDestination(item: $presentedPersonID) { personID in
                 PersonDetailView(personID: personID, client: client, peopleStore: store)
             }
         }

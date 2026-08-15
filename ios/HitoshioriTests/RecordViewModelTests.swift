@@ -16,6 +16,20 @@ struct RecordViewModelTests {
         #expect(viewModel.canSave)
     }
 
+    @Test("今日の一人を既存人物として引き継いで記録する")
+    func savesTodayReminderPersonAsExistingPerson() async {
+        let client = StubRecordAPIClient()
+        let viewModel = RecordViewModel(client: client)
+
+        viewModel.selectExistingPerson(id: 42, name: "たなか")
+        viewModel.topic = "久しぶりに連絡した"
+        await viewModel.save()
+
+        #expect(viewModel.name == "")
+        #expect(client.createCalls.first?.person == .existing(id: 42))
+        #expect(client.createCalls.first?.topic == "久しぶりに連絡した")
+    }
+
     @Test("入力名で既存人物をかな種別を問わず部分一致検索する")
     func filtersExistingPeopleByNormalizedPartialName() {
         let viewModel = RecordViewModel(client: StubRecordAPIClient())

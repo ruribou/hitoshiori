@@ -102,6 +102,23 @@ final class RecordViewModel {
         name = person.name
     }
 
+    func selectExistingPerson(id: Int, name: String) {
+        if let person = people.first(where: { $0.id == id }) {
+            select(person: person)
+            return
+        }
+
+        select(
+            person: Person(
+                id: id,
+                name: name,
+                note: "",
+                lastEncounteredAt: nil,
+                encountersCount: 0
+            )
+        )
+    }
+
     func updateName(_ updatedName: String) {
         name = updatedName
         errorMessage = nil

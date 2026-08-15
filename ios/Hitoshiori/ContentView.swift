@@ -1,22 +1,51 @@
 import SwiftUI
 import UIKit
 
+private enum AppTab: Hashable {
+    case record
+    case people
+}
+
 @MainActor
 struct ContentView: View {
     @State private var peopleStore = PeopleStore()
+    @State private var reminderViewModel = TodayReminderViewModel()
+    @State private var notificationScheduler = LocalNotificationScheduler()
+    @State private var selectedTab: AppTab = .record
+    @State private var presentedPersonID: Int?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        TabView {
-            RecordView(peopleStore: peopleStore)
+        TabView(selection: $selectedTab) {
+            RecordView(
+                peopleStore: peopleStore,
+                reminder: reminderViewModel.reminder,
+                onShowPerson: showPerson
+            )
                 .tabItem {
                     Label("記録", systemImage: "square.and.pencil")
                 }
+                .tag(AppTab.record)
 
-            PeopleListView(store: peopleStore)
+            PeopleListView(store: peopleStore, presentedPersonID: $presentedPersonID)
                 .tabItem {
                     Label("人物", systemImage: "person.2")
                 }
+                .tag(AppTab.people)
         }
+        .task {
+            await notificationScheduler.configure()
+            await reminderViewModel.load()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await reminderViewModel.load() }
+        }
+    }
+
+    private func showPerson(id: Int) {
+        selectedTab = .people
+        presentedPersonID = id
     }
 }
 
@@ -24,24 +53,48 @@ struct ContentView: View {
 private struct RecordView: View {
     @State private var viewModel: RecordViewModel
     @State private var transcriber: any SpeechTranscribing
+    @State private var isTodayReminderVisible = true
     @Environment(\.scenePhase) private var scenePhase
+    private let reminder: Reminder?
+    private let onShowPerson: (Int) -> Void
 
     init(
         peopleStore: PeopleStore,
+        reminder: Reminder? = nil,
+        onShowPerson: @escaping (Int) -> Void = { _ in },
         transcriber: any SpeechTranscribing = SpeechTranscriber()
     ) {
         _viewModel = State(initialValue: RecordViewModel(peopleStore: peopleStore))
         _transcriber = State(initialValue: transcriber)
+        self.reminder = reminder
+        self.onShowPerson = onShowPerson
     }
 
     var body: some View {
         Form {
+            if let reminder, isTodayReminderVisible {
+                Section {
+                    TodayReminderCard(
+                        reminder: reminder,
+                        onShowPerson: { onShowPerson(reminder.person.id) },
+                        onRecord: {
+                            viewModel.selectExistingPerson(
+                                id: reminder.person.id,
+                                name: reminder.person.name
+                            )
+                            isTodayReminderVisible = false
+                        },
+                        onDismiss: { isTodayReminderVisible = false }
+                    )
+                }
+            }
+
             Section {
                 HStack {
                     Label("今日、誰と会った？", systemImage: "person.crop.circle.badge.plus")
                         .font(.title3.weight(.semibold))
                     Spacer()
-                    backendStatusLabel
+                    BackendStatusIndicator(status: viewModel.backendStatus)
                 }
 
                 TextField("名前・あだ名", text: Binding(
@@ -218,6 +271,9 @@ private struct RecordView: View {
             guard state == .idle else { return }
             viewModel.finishVoiceMemo(with: transcriber.transcript)
         }
+        .onChange(of: reminder?.id) { _, _ in
+            isTodayReminderVisible = true
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 transcriber.refreshPermissionState()
@@ -260,23 +316,6 @@ private struct RecordView: View {
         Task { await viewModel.stopVoiceMemo(using: transcriber) }
     }
 
-    @ViewBuilder
-    private var backendStatusLabel: some View {
-        switch viewModel.backendStatus {
-        case .checking:
-            Image(systemName: "ellipsis.circle")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("backend に接続中")
-        case .reachable:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .accessibilityLabel("backend に接続済み")
-        case .unreachable:
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.red)
-                .accessibilityLabel("backend に未接続")
-        }
-    }
 }
 
 private struct TagChip: View {
