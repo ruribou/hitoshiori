@@ -5,8 +5,8 @@ import Testing
 
 @MainActor
 struct RecordViewModelTests {
-    @Test
-    func 名前または既存人物があれば保存できる() {
+    @Test("名前または既存人物があれば保存できる")
+    func canSaveWithNameOrSelectedPerson() {
         let viewModel = RecordViewModel()
 
         #expect(!viewModel.canSave)
@@ -16,8 +16,8 @@ struct RecordViewModelTests {
         #expect(viewModel.canSave)
     }
 
-    @Test
-    func 入力名で既存人物を部分一致検索する() {
+    @Test("入力名で既存人物を部分一致検索する")
+    func filtersExistingPeopleByPartialName() {
         let viewModel = RecordViewModel()
         viewModel.people = [
             Person(id: 1, name: "田中太郎", note: "", lastEncounteredAt: nil, encountersCount: 0),
@@ -29,8 +29,8 @@ struct RecordViewModelTests {
         #expect(viewModel.suggestions.map(\.id) == [1])
     }
 
-    @Test
-    func 既存人物を選んだ後に名前を変えると新規人物扱いに戻る() {
+    @Test("既存人物を選んだ後に名前を変えると新規人物扱いに戻る")
+    func clearsSelectedPersonWhenNameChanges() {
         let viewModel = RecordViewModel()
         let person = Person(id: 1, name: "たなか", note: "", lastEncounteredAt: nil, encountersCount: 0)
 
@@ -43,8 +43,8 @@ struct RecordViewModelTests {
         #expect(viewModel.canSave)
     }
 
-    @Test
-    func 選択タグと入力タグを保存用のタグ名に混ぜる() {
+    @Test("選択タグと入力タグを保存用のタグ名に混ぜる")
+    func combinesSelectedAndTypedTagsForSubmission() {
         let viewModel = RecordViewModel()
         viewModel.tags = [
             Tag(id: 1, name: "ハッカソン"),
@@ -57,8 +57,8 @@ struct RecordViewModelTests {
         #expect(viewModel.tagNamesForSubmission == ["STECH", "勉強会"])
     }
 
-    @Test
-    func 保存に失敗しても入力内容を保持する() async {
+    @Test("保存に失敗しても入力内容を保持する")
+    func preservesInputWhenSavingFails() async {
         let viewModel = RecordViewModel(client: FailingRecordAPIClient())
         viewModel.updateName("たなか")
         viewModel.topic = "勉強会"
