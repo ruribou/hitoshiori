@@ -142,6 +142,21 @@ struct RecordViewModelTests {
         #expect(viewModel.tagNamesForSubmission.isEmpty)
     }
 
+    @Test("音声文字起こしは既存メモの末尾へ逐次追記する")
+    func appendsTranscriptionToExistingMemo() {
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+        viewModel.memo = "前に手入力したメモ"
+
+        viewModel.beginMemoTranscription()
+        viewModel.updateMemo(withTranscription: "こんにちは")
+
+        #expect(viewModel.memo == "前に手入力したメモ\nこんにちは")
+
+        viewModel.updateMemo(withTranscription: "こんにちは。次のイベントで会いましょう")
+
+        #expect(viewModel.memo == "前に手入力したメモ\nこんにちは。次のイベントで会いましょう")
+    }
+
     private func person(id: Int, name: String) -> Person {
         Person(id: id, name: name, note: "", lastEncounteredAt: nil, encountersCount: 0)
     }

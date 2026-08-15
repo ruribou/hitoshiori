@@ -1,7 +1,10 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @State private var viewModel = RecordViewModel()
+    @State private var transcriber = SpeechTranscriber()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Form {
@@ -78,9 +81,59 @@ struct ContentView: View {
 
             Section("話したこと") {
                 TextField("話題（任意）", text: $viewModel.topic)
+
+                Button {
+                    if transcriber.isRecording {
+                        transcriber.stop()
+                    } else {
+                        viewModel.beginMemoTranscription()
+                        Task { await transcriber.start() }
+                    }
+                } label: {
+                    Label(
+                        transcriber.isRecording ? "文字起こしを停止" : "話してメモを入力",
+                        systemImage: transcriber.isRecording ? "stop.circle.fill" : "mic.circle.fill"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(transcriber.isRecording ? .red : .accentColor)
+                .disabled(transcriber.isRequestingPermission || transcriber.needsSettings || transcriber.isUnavailable)
+
+                if transcriber.isRecording {
+                    Label("録音・文字起こし中", systemImage: "waveform")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.red)
+                } else if transcriber.isRequestingPermission {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("マイクと音声認識を確認中…")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 TextEditor(text: $viewModel.memo)
                     .frame(minHeight: 88)
                     .accessibilityLabel("メモ（任意）")
+            }
+
+            if transcriber.needsSettings {
+                Section {
+                    Text("音声メモにはマイクと音声認識の許可が必要です。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Button("設定を開く") {
+                        guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(settingsURL)
+                    }
+                }
+            } else if let transcriptionError = transcriber.errorMessage {
+                Section {
+                    Label(transcriptionError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
             }
 
             if let errorMessage = viewModel.errorMessage {
@@ -131,6 +184,13 @@ struct ContentView: View {
             try? await Task.sleep(for: .seconds(1.2))
             guard !Task.isCancelled else { return }
             viewModel.didSave = false
+        }
+        .onChange(of: transcriber.transcript) { _, transcript in
+            viewModel.updateMemo(withTranscription: transcript)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            transcriber.refreshPermissionState()
         }
     }
 

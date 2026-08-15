@@ -41,6 +41,7 @@ final class RecordViewModel {
 
     private let client: any RecordAPIClient
     private(set) var selectedPerson: Person?
+    private var memoBeforeTranscription: String?
 
     init(client: any RecordAPIClient = APIClient.development) {
         self.client = client
@@ -107,6 +108,20 @@ final class RecordViewModel {
             selectedTagNames.remove(name)
         } else {
             selectedTagNames.insert(name)
+        }
+    }
+
+    func beginMemoTranscription() {
+        memoBeforeTranscription = memo
+    }
+
+    func updateMemo(withTranscription transcript: String) {
+        guard let memoBeforeTranscription else { return }
+
+        if memoBeforeTranscription.isEmpty || transcript.isEmpty {
+            memo = memoBeforeTranscription + transcript
+        } else {
+            memo = "\(memoBeforeTranscription)\n\(transcript)"
         }
     }
 
@@ -187,6 +202,7 @@ final class RecordViewModel {
         newTagName = ""
         selectedPerson = nil
         selectedTagNames = []
+        memoBeforeTranscription = nil
     }
 
     private func normalized(_ value: String) -> String {
