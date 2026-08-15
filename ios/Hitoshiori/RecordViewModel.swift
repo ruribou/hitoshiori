@@ -1,7 +1,7 @@
 import Foundation
 import Observation
-import UIKit
 
+@MainActor
 protocol RecordAPIClient: Sendable {
     func health() async throws -> Int
     func createEncounter(
@@ -22,7 +22,7 @@ extension APIClient: RecordAPIClient {}
 final class RecordViewModel {
     enum BackendStatus: Equatable {
         case checking
-        case reachable(Int)
+        case reachable
         case unreachable
     }
 
@@ -47,16 +47,14 @@ final class RecordViewModel {
     }
 
     var suggestions: [Person] {
-        let query = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = normalized(trimmedName)
         guard !query.isEmpty, selectedPerson == nil else { return [] }
 
-        return people.filter {
-            $0.name.localizedCaseInsensitiveContains(query)
-        }
+        return people.filter { normalized($0.name).contains(query) }
     }
 
     var canSave: Bool {
-        selectedPerson != nil || !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        selectedPerson != nil || !trimmedName.isEmpty
     }
 
     var tagNamesForSubmission: [String] {
@@ -70,31 +68,23 @@ final class RecordViewModel {
     }
 
     func load() async {
-        isLoading = true
+        errorMessage = nil
 
-        async let fetchedPeople = client.fetchPeople()
-        async let fetchedTags = client.fetchTags()
         async let healthStatus = client.health()
+        await refreshPeopleAndTags()
 
         do {
-            people = try await fetchedPeople
-        } catch {
-            people = []
-        }
-
-        do {
-            tags = try await fetchedTags
-        } catch {
-            tags = []
-        }
-
-        do {
-            backendStatus = .reachable(try await healthStatus)
+            let statusCode = try await healthStatus
+            if (200..<300).contains(statusCode) {
+                backendStatus = .reachable
+            } else {
+                backendStatus = .unreachable
+                appendErrorMessage("backend が HTTP \(statusCode) を返しています")
+            }
         } catch {
             backendStatus = .unreachable
+            appendErrorMessage(error.localizedDescription)
         }
-
-        isLoading = false
     }
 
     func select(person: Person) {
@@ -104,8 +94,11 @@ final class RecordViewModel {
 
     func updateName(_ updatedName: String) {
         name = updatedName
-        if selectedPerson?.name != updatedName {
-            selectedPerson = nil
+        errorMessage = nil
+
+        if let selectedPerson,
+           normalized(selectedPerson.name) != normalized(trimmedName) {
+            self.selectedPerson = nil
         }
     }
 
@@ -120,11 +113,13 @@ final class RecordViewModel {
     func save() async {
         guard canSave else { return }
 
+        didSave = false
+
         let person: EncounterPersonTarget
         if let selectedPerson {
             person = .existing(id: selectedPerson.id)
         } else {
-            person = .named(name.trimmingCharacters(in: .whitespacesAndNewlines))
+            person = .named(trimmedName)
         }
 
         isSaving = true
@@ -138,29 +133,50 @@ final class RecordViewModel {
                 memo: optionalValue(from: memo),
                 tagNames: tagNamesForSubmission
             )
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
             resetForm()
             didSave = true
             isSaving = false
-
-            try? await Task.sleep(for: .seconds(1.2))
-            didSave = false
-            await refreshSuggestionsAndTags()
+            await refreshPeopleAndTags()
         } catch {
             errorMessage = error.localizedDescription
             isSaving = false
         }
     }
 
-    private func refreshSuggestionsAndTags() async {
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func refreshPeopleAndTags() async {
+        isLoading = true
+        defer { isLoading = false }
+
         async let fetchedPeople = client.fetchPeople()
         async let fetchedTags = client.fetchTags()
+        var errors: [String] = []
 
-        if let people = try? await fetchedPeople {
-            self.people = people
+        do {
+            people = try await fetchedPeople
+        } catch {
+            errors.append(error.localizedDescription)
         }
-        if let tags = try? await fetchedTags {
-            self.tags = tags
+
+        do {
+            tags = try await fetchedTags
+        } catch {
+            errors.append(error.localizedDescription)
+        }
+
+        for errorMessage in errors {
+            appendErrorMessage(errorMessage)
+        }
+    }
+
+    private func appendErrorMessage(_ message: String) {
+        if let errorMessage, !errorMessage.isEmpty {
+            self.errorMessage = "\(errorMessage)\n\(message)"
+        } else {
+            errorMessage = message
         }
     }
 
@@ -171,6 +187,15 @@ final class RecordViewModel {
         newTagName = ""
         selectedPerson = nil
         selectedTagNames = []
+    }
+
+    private func normalized(_ value: String) -> String {
+        value
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                locale: .current
+            )
+            .applyingTransform(.hiraganaToKatakana, reverse: false) ?? value
     }
 
     private func optionalValue(from value: String) -> String? {
