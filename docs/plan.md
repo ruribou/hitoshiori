@@ -1,7 +1,7 @@
 # ロードマップ
 
 MVP 全体の流れと、計画に効いた決定の記録。
-**タスクの詳細・受け入れ条件は docs/tasks/ 以下、進捗は docs/tasks/README.md の表が正。**
+**タスクの詳細・受け入れ条件は `task` ラベルの GitHub issue、進捗は追跡 issue [#22](https://github.com/ruribou/hitoshiori/issues/22) が正。**
 
 ## 全体像
 
@@ -48,3 +48,4 @@ Phase 4  磨き込み・実運用開始          使ってから決める
 | 2026-08-14 | `last_encountered_at` は people に非正規化 | 想起バッチの抽出条件。都度 MAX 集計を避ける |
 | 2026-08-14 | サーバの TZ は Tokyo(`config.time_zone`) | 「今日の 1 人」「毎朝のバッチ」の日付判定を JST に揃える |
 | 2026-08-14 | 実装計画は docs/tasks/ に 1 タスク 1 ファイルで管理 | エージェントに 1 タスク単位で渡せる粒度にするため |
+| 2026-08-15 | 実装計画を GitHub issue へ移行(docs/tasks/ は廃止) | 進捗表の手動更新が破綻したため。PR の `Closes #N` でマージ時に自動クローズされる。git 管理外だった指示書が別クローン・CI からも参照できるようになる |
