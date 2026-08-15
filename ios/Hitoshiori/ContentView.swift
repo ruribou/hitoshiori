@@ -3,11 +3,34 @@ import UIKit
 
 @MainActor
 struct ContentView: View {
-    @State private var viewModel = RecordViewModel()
+    @State private var peopleStore = PeopleStore()
+
+    var body: some View {
+        TabView {
+            RecordView(peopleStore: peopleStore)
+                .tabItem {
+                    Label("記録", systemImage: "square.and.pencil")
+                }
+
+            PeopleListView(store: peopleStore)
+                .tabItem {
+                    Label("人物", systemImage: "person.2")
+                }
+        }
+    }
+}
+
+@MainActor
+private struct RecordView: View {
+    @State private var viewModel: RecordViewModel
     @State private var transcriber: any SpeechTranscribing
     @Environment(\.scenePhase) private var scenePhase
 
-    init(transcriber: any SpeechTranscribing = SpeechTranscriber()) {
+    init(
+        peopleStore: PeopleStore,
+        transcriber: any SpeechTranscribing = SpeechTranscriber()
+    ) {
+        _viewModel = State(initialValue: RecordViewModel(peopleStore: peopleStore))
         _transcriber = State(initialValue: transcriber)
     }
 
@@ -199,8 +222,11 @@ struct ContentView: View {
             if phase == .active {
                 transcriber.refreshPermissionState()
             } else {
-                transcriber.stop()
+                finishVoiceMemoIfNeeded()
             }
+        }
+        .onDisappear {
+            finishVoiceMemoIfNeeded()
         }
     }
 
@@ -224,10 +250,14 @@ struct ContentView: View {
     @ViewBuilder
     private func errorSection(_ message: String) -> some View {
         Section {
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.footnote)
-                .foregroundStyle(.red)
+            ErrorMessageLabel(message: message)
         }
+    }
+
+    private func finishVoiceMemoIfNeeded() {
+        guard transcriber.isRecording || transcriber.isFinishing else { return }
+
+        Task { await viewModel.stopVoiceMemo(using: transcriber) }
     }
 
     @ViewBuilder

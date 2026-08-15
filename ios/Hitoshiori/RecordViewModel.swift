@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 @MainActor
-protocol RecordAPIClient: Sendable {
+protocol RecordAPIClient: PeopleFetching {
     func health() async throws -> Int
     func createEncounter(
         for person: EncounterPersonTarget,
@@ -11,7 +11,6 @@ protocol RecordAPIClient: Sendable {
         memo: String?,
         tagNames: [String]
     ) async throws -> Encounter
-    func fetchPeople() async throws -> [Person]
     func fetchTags() async throws -> [Tag]
 }
 
@@ -30,7 +29,6 @@ final class RecordViewModel {
     var topic = ""
     var memo = ""
     var newTagName = ""
-    var people: [Person] = []
     var tags: [Tag] = []
     var selectedTagNames: Set<String> = []
     var backendStatus: BackendStatus = .checking
@@ -40,11 +38,22 @@ final class RecordViewModel {
     var errorMessage: String?
 
     private let client: any RecordAPIClient
+    private let peopleStore: PeopleStore
     private(set) var selectedPerson: Person?
     private var memoBeforeTranscription: String?
+    private var isStoppingVoiceMemo = false
 
-    init(client: any RecordAPIClient = APIClient.development) {
+    init(
+        client: any RecordAPIClient = APIClient.development,
+        peopleStore: PeopleStore? = nil
+    ) {
         self.client = client
+        self.peopleStore = peopleStore ?? PeopleStore(client: client)
+    }
+
+    var people: [Person] {
+        get { peopleStore.people }
+        set { peopleStore.people = newValue }
     }
 
     var suggestions: [Person] {
@@ -144,6 +153,10 @@ final class RecordViewModel {
     }
 
     func stopVoiceMemo(using transcriber: any SpeechTranscribing) async {
+        guard !isStoppingVoiceMemo, transcriber.isRecording || transcriber.isFinishing else { return }
+
+        isStoppingVoiceMemo = true
+        defer { isStoppingVoiceMemo = false }
         await transcriber.stopAndWaitForFinalResult()
         finishVoiceMemo(with: transcriber.transcript)
     }
@@ -197,14 +210,13 @@ final class RecordViewModel {
         isLoading = true
         defer { isLoading = false }
 
-        async let fetchedPeople = client.fetchPeople()
+        async let loadedPeople: Void = peopleStore.load()
         async let fetchedTags = client.fetchTags()
         var errors: [String] = []
 
-        do {
-            people = try await fetchedPeople
-        } catch {
-            errors.append(error.localizedDescription)
+        await loadedPeople
+        if let peopleErrorMessage = peopleStore.errorMessage {
+            errors.append(peopleErrorMessage)
         }
 
         do {
