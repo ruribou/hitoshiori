@@ -157,6 +157,64 @@ struct RecordViewModelTests {
         #expect(viewModel.memo == "前に手入力したメモ\nこんにちは。次のイベントで会いましょう")
     }
 
+    @Test("空のメモへの音声文字起こしは先頭に改行を入れない")
+    func appendsTranscriptionToEmptyMemo() {
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+
+        viewModel.beginMemoTranscription()
+        viewModel.updateMemo(withTranscription: "こんにちは")
+
+        #expect(viewModel.memo == "こんにちは")
+    }
+
+    @Test("音声文字起こしを開始していないメモは変更しない")
+    func ignoresTranscriptionWithoutStarting() {
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+        viewModel.memo = "手入力したメモ"
+
+        viewModel.updateMemo(withTranscription: "こんにちは")
+
+        #expect(viewModel.memo == "手入力したメモ")
+    }
+
+    @Test("音声文字起こし終了後の遅延結果は手修正を上書きしない")
+    func preservesEditsAfterVoiceMemoFinishes() async {
+        let transcriber = StubSpeechTranscriber()
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+        viewModel.memo = "手入力したメモ"
+        transcriber.finalTranscript = "最終結果"
+
+        await viewModel.startVoiceMemo(using: transcriber)
+        transcriber.transcript = "途中の結果"
+        viewModel.updateMemo(withTranscription: transcriber.transcript)
+
+        await viewModel.stopVoiceMemo(using: transcriber)
+
+        #expect(transcriber.stopAndWaitCallCount == 1)
+        #expect(viewModel.memo == "手入力したメモ\n最終結果")
+
+        viewModel.memo = "手修正後のメモ"
+        viewModel.updateMemo(withTranscription: "遅れて届いた結果")
+
+        #expect(viewModel.memo == "手修正後のメモ")
+    }
+
+    @Test("保存前に音声文字起こしを終了して最終結果を送る")
+    func savesAfterFinishingVoiceMemo() async {
+        let client = StubRecordAPIClient()
+        let transcriber = StubSpeechTranscriber()
+        let viewModel = RecordViewModel(client: client)
+        viewModel.updateName("たなか")
+        transcriber.finalTranscript = "最終結果"
+
+        await viewModel.startVoiceMemo(using: transcriber)
+        await viewModel.save(using: transcriber)
+
+        #expect(transcriber.stopAndWaitCallCount == 1)
+        #expect(transcriber.state == .idle)
+        #expect(client.createCalls.last?.memo == "最終結果")
+    }
+
     private func person(id: Int, name: String) -> Person {
         Person(id: id, name: name, note: "", lastEncounteredAt: nil, encountersCount: 0)
     }
@@ -227,6 +285,36 @@ private final class StubRecordAPIClient: RecordAPIClient {
         guard !results.isEmpty else { return defaultValue }
         return try results.removeFirst().get()
     }
+}
+
+@MainActor
+private final class StubSpeechTranscriber: SpeechTranscribing {
+    var state: SpeechTranscriptionState = .idle
+    var transcript = ""
+    var errorMessage: String?
+    var finalTranscript = ""
+    private(set) var startCallCount = 0
+    private(set) var stopAndWaitCallCount = 0
+
+    func start() async {
+        startCallCount += 1
+        state = .recording
+    }
+
+    func stop() {
+        guard state == .recording else { return }
+        state = .finishing
+    }
+
+    func stopAndWaitForFinalResult() async {
+        stopAndWaitCallCount += 1
+        stop()
+        await Task.yield()
+        transcript = finalTranscript
+        state = .idle
+    }
+
+    func refreshPermissionState() {}
 }
 
 private extension Encounter {

@@ -3,23 +3,62 @@ import Foundation
 import Observation
 import Speech
 
-@MainActor
-@Observable
-final class SpeechTranscriber {
-    enum State: Equatable {
-        case idle
-        case requestingPermission
-        case recording
-        case permissionDenied
-        case unavailable
+private final class AudioNotificationObservers {
+    private let notificationCenter: NotificationCenter
+    private let observers: [NSObjectProtocol]
+
+    init(
+        notificationCenter: NotificationCenter,
+        handleInterruption: @escaping @Sendable (Notification) -> Void,
+        handleConfigurationChange: @escaping @Sendable () -> Void
+    ) {
+        self.notificationCenter = notificationCenter
+        observers = [
+            notificationCenter.addObserver(
+                forName: AVAudioSession.interruptionNotification,
+                object: AVAudioSession.sharedInstance(),
+                queue: .main,
+                using: handleInterruption
+            ),
+            notificationCenter.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: nil,
+                queue: .main
+            ) { _ in
+                handleConfigurationChange()
+            }
+        ]
     }
 
-    var state: State = .idle
-    var transcript = ""
-    var errorMessage: String?
+    deinit {
+        observers.forEach(notificationCenter.removeObserver)
+    }
+}
 
+enum SpeechTranscriptionState: Equatable {
+    case idle, requestingPermission, recording, finishing, permissionDenied, unavailable
+}
+
+@MainActor
+protocol SpeechTranscribing: AnyObject {
+    var state: SpeechTranscriptionState { get }
+    var transcript: String { get }
+    var errorMessage: String? { get }
+
+    func start() async
+    func stop()
+    func stopAndWaitForFinalResult() async
+    func refreshPermissionState()
+}
+
+@MainActor
+extension SpeechTranscribing {
     var isRecording: Bool {
         state == .recording
+    }
+
+    var isFinishing: Bool {
+        state == .finishing
     }
 
     var isRequestingPermission: Bool {
@@ -29,21 +68,47 @@ final class SpeechTranscriber {
     var needsSettings: Bool {
         state == .permissionDenied
     }
+}
 
-    var isUnavailable: Bool {
-        state == .unavailable
+enum SpeechTranscriptionError: LocalizedError {
+    case audioInputUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .audioInputUnavailable:
+            "この端末のマイク入力を利用できません"
+        }
     }
+}
+
+@MainActor
+@Observable
+final class SpeechTranscriber: SpeechTranscribing {
+    typealias State = SpeechTranscriptionState
+
+    private(set) var state: State = .idle
+    private(set) var transcript = ""
+    private(set) var errorMessage: String?
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ja-JP"))
     private let audioSession = AVAudioSession.sharedInstance()
+    private let notificationCenter: NotificationCenter
     private var audioEngine: AVAudioEngine?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var recognitionSessionID: UUID?
     private var wasManuallyStopped = false
+    private var finishingContinuation: CheckedContinuation<Void, Never>?
+    private var finishingTimeoutTask: Task<Void, Never>?
+    private var notificationObservers: AudioNotificationObservers?
+
+    init(notificationCenter: NotificationCenter = .default) {
+        self.notificationCenter = notificationCenter
+        registerAudioSessionObservers()
+    }
 
     func start() async {
-        guard !isRecording, !isRequestingPermission else { return }
+        guard !isRecording, !isFinishing, !isRequestingPermission else { return }
 
         state = .requestingPermission
         errorMessage = nil
@@ -51,13 +116,11 @@ final class SpeechTranscriber {
 
         guard await requestPermissionsIfNeeded() else { return }
         guard let recognizer else {
-            state = .unavailable
-            errorMessage = "この端末では日本語の音声認識を利用できません"
+            showUnavailable(message: "この端末では日本語の音声認識を利用できません")
             return
         }
         guard recognizer.isAvailable else {
-            state = .unavailable
-            errorMessage = "音声認識を現在利用できません。しばらくしてからもう一度お試しください"
+            showUnavailable(message: "音声認識を現在利用できません。もう一度お試しください")
             return
         }
 
@@ -67,29 +130,72 @@ final class SpeechTranscriber {
         } catch {
             cancelCurrentRecognition()
             wasManuallyStopped = false
-            state = .unavailable
-            errorMessage = "音声入力を開始できませんでした: \(error.localizedDescription)"
+            showUnavailable(message: Self.message(for: error) ?? "音声入力を開始できませんでした")
         }
     }
 
+    func stop() {
+        guard isRecording else { return }
+
+        wasManuallyStopped = true
+        state = .finishing
+        stopAudioInput()
+        recognitionTask?.finish()
+        scheduleFinishingTimeout()
+    }
+
+    func stopAndWaitForFinalResult() async {
+        stop()
+        guard isFinishing else { return }
+
+        await withCheckedContinuation { continuation in
+            finishingContinuation = continuation
+        }
+    }
+
+    func refreshPermissionState() {
+        guard !isRecording, !isFinishing, !isRequestingPermission else { return }
+
+        if hasDeniedPermission {
+            showPermissionDenied()
+        } else if state == .permissionDenied || state == .unavailable {
+            state = .idle
+            errorMessage = nil
+        }
+    }
+
+    static func message(for error: Error) -> String? {
+        if let transcriptionError = error as? SpeechTranscriptionError {
+            return transcriptionError.errorDescription
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == "kAFAssistantErrorDomain", [203, 216, 1_110].contains(nsError.code) {
+            return nil
+        }
+        if nsError.domain == NSURLErrorDomain {
+            return "文字起こしを完了できませんでした: ネットワークに接続できません"
+        }
+        return "文字起こしを完了できませんでした。もう一度お試しください"
+    }
+}
+
+private extension SpeechTranscriber {
     private func beginRecognition(with recognizer: SFSpeechRecognizer) throws {
         cancelCurrentRecognition()
         wasManuallyStopped = false
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        try configureAudioSession()
 
         let engine = AVAudioEngine()
         let inputNode = engine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw SpeechTranscriptionError.audioInputUnavailable
+        }
+
+        let request = makeRecognitionRequest(using: recognizer)
         let sessionID = UUID()
-
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-
         inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { [weak request] buffer, _ in
             request?.append(buffer)
         }
@@ -103,46 +209,73 @@ final class SpeechTranscriber {
         try engine.start()
     }
 
+    private func configureAudioSession() throws {
+        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+    }
+
+    private func makeRecognitionRequest(
+        using recognizer: SFSpeechRecognizer
+    ) -> SFSpeechAudioBufferRecognitionRequest {
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
+        return request
+    }
+
     private func makeRecognitionTask(
         using recognizer: SFSpeechRecognizer,
         request: SFSpeechAudioBufferRecognitionRequest,
         sessionID: UUID
     ) -> SFSpeechRecognitionTask {
         recognizer.recognitionTask(with: request) { [weak self] result, error in
-            Task { @MainActor [weak self] in
+            Task { @MainActor in
                 guard let self, self.recognitionSessionID == sessionID else { return }
 
                 if let result {
                     self.transcript = result.bestTranscription.formattedString
                 }
 
-                if let error, !self.wasManuallyStopped {
-                    self.finishRecognition(with: error.localizedDescription)
-                } else if result?.isFinal == true || self.wasManuallyStopped {
+                if let error {
+                    let message = self.wasManuallyStopped ? nil : Self.message(for: error)
+                    self.finishRecognition(with: message)
+                } else if result?.isFinal == true {
                     self.finishRecognition()
                 }
             }
         }
     }
 
-    func stop() {
-        guard isRecording else { return }
-
-        wasManuallyStopped = true
-        stopAudioInput()
-        state = .idle
+    private func registerAudioSessionObservers() {
+        notificationObservers = AudioNotificationObservers(
+            notificationCenter: notificationCenter,
+            handleInterruption: { [weak self] notification in
+                guard Self.isInterruptionBegan(notification) else { return }
+                Task { @MainActor in
+                    self?.handleAudioInterruption()
+                }
+            },
+            handleConfigurationChange: { [weak self] in
+                Task { @MainActor in
+                    self?.handleAudioInterruption()
+                }
+            }
+        )
     }
 
-    func refreshPermissionState() {
-        guard !isRecording, !isRequestingPermission else { return }
-
-        if hasDeniedPermission {
-            state = .permissionDenied
-            errorMessage = "マイクと音声認識を使うには、設定で許可してください"
-        } else if state == .permissionDenied || state == .unavailable {
-            state = .idle
-            errorMessage = nil
+    nonisolated private static func isInterruptionBegan(_ notification: Notification) -> Bool {
+        guard let rawValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: rawValue) else {
+            return false
         }
+        return type == .began
+    }
+
+    private func handleAudioInterruption() {
+        guard isRecording || isFinishing else { return }
+        finishRecognition(cancelTask: true)
     }
 
     private var hasDeniedPermission: Bool {
@@ -211,29 +344,50 @@ final class SpeechTranscriber {
 
     private func showPermissionDenied() {
         state = .permissionDenied
-        errorMessage = "マイクと音声認識を使うには、設定で許可してください"
+        errorMessage = nil
     }
 
-    private func finishRecognition(with errorMessage: String? = nil) {
-        stopAudioInput()
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        recognitionRequest = nil
-        recognitionSessionID = nil
-        wasManuallyStopped = false
-        state = .idle
+    private func showUnavailable(message: String) {
+        state = .unavailable
+        errorMessage = message
+    }
 
-        if let errorMessage {
-            self.errorMessage = "文字起こしを完了できませんでした: \(errorMessage)"
+    private func scheduleFinishingTimeout() {
+        finishingTimeoutTask?.cancel()
+        finishingTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            self?.finishRecognition(cancelTask: true)
         }
     }
 
+    private func finishRecognition(with errorMessage: String? = nil, cancelTask: Bool = false) {
+        cleanupRecognition(cancelTask: cancelTask)
+        wasManuallyStopped = false
+        state = .idle
+        self.errorMessage = errorMessage
+        resolveFinishingWait()
+    }
+
     private func cancelCurrentRecognition() {
+        cleanupRecognition(cancelTask: true)
+    }
+
+    private func cleanupRecognition(cancelTask: Bool) {
         stopAudioInput()
-        recognitionTask?.cancel()
+        if cancelTask {
+            recognitionTask?.cancel()
+        }
         recognitionTask = nil
         recognitionRequest = nil
         recognitionSessionID = nil
+    }
+
+    private func resolveFinishingWait() {
+        finishingTimeoutTask?.cancel()
+        finishingTimeoutTask = nil
+        finishingContinuation?.resume()
+        finishingContinuation = nil
     }
 
     private func stopAudioInput() {

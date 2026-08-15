@@ -125,6 +125,37 @@ final class RecordViewModel {
         }
     }
 
+    func endMemoTranscription() {
+        memoBeforeTranscription = nil
+    }
+
+    func startVoiceMemo(using transcriber: any SpeechTranscribing) async {
+        beginMemoTranscription()
+        await transcriber.start()
+
+        if !transcriber.isRecording {
+            endMemoTranscription()
+        }
+    }
+
+    func finishVoiceMemo(with transcript: String) {
+        updateMemo(withTranscription: transcript)
+        endMemoTranscription()
+    }
+
+    func stopVoiceMemo(using transcriber: any SpeechTranscribing) async {
+        await transcriber.stopAndWaitForFinalResult()
+        finishVoiceMemo(with: transcriber.transcript)
+    }
+
+    func save(using transcriber: any SpeechTranscribing) async {
+        if transcriber.isRecording || transcriber.isFinishing {
+            await stopVoiceMemo(using: transcriber)
+        }
+
+        await save()
+    }
+
     func save() async {
         guard canSave else { return }
 
@@ -202,7 +233,7 @@ final class RecordViewModel {
         newTagName = ""
         selectedPerson = nil
         selectedTagNames = []
-        memoBeforeTranscription = nil
+        endMemoTranscription()
     }
 
     private func normalized(_ value: String) -> String {
