@@ -12,31 +12,45 @@ Rails 8 API(backend)+ SwiftUI(ios)のモノレポ。
 実装タスクに入る前に、この順で読むこと。
 
 1. `docs/product.md` — 課題・設計原則・MVP スコープ。**判断に迷ったらここの設計原則に従う**
-2. `docs/tasks/README.md` — タスク一覧と進捗。**次に何をやるかはここが正**
-3. `docs/tasks/NN-*.md` — 担当タスクの詳細(スコープ・実装メモ・受け入れ条件)
-   - `docs/tasks/` は **git 管理外**(ローカル専用の指示書)。コミットに含めない。
-     無い環境では docs/plan.md のロードマップに従う
+2. 追跡 issue [#22](https://github.com/ruribou/hitoshiori/issues/22) — タスク一覧・依存グラフ・進め方。
+   **次に何をやるかはここが正**
+3. `task` ラベルの issue — 担当タスクの詳細(ゴール・スコープ・実装メモ・受け入れ条件)
+   - 本文は `gh issue view <番号>` で読む。進捗は issue の open / close が正
 4. `docs/schema.md` / `docs/api.md` — DB・API 仕様(確定版)。タスクから参照される
 5. `docs/plan.md` — 全体ロードマップと決定事項ログ(背景を知りたいとき)
 
 ## 作業規約
 
-- 実装は `docs/tasks/` のタスク単位で進める。1 タスク = 1 PR が基本
+- 実装は `task` ラベルの issue 単位で進める。1 issue = 1 PR が基本
 - 番号付き実装タスクは、PR不要と明示されない限り、受け入れ条件の確認後に
   commit・push・PR作成まで自動で行う
+- **PR 本文に `Closes #<issue番号>` を必ず書く。** マージで issue が自動クローズされ、
+  追跡 issue のチェックリストも自動で埋まる
 - 未マージの依存タスクを土台にする場合は、その依存PRのブランチをbaseにした
   Stacked PRとして作成する。自動マージはしない
-- 着手時・完了時に `docs/tasks/README.md` の状態欄(未着手 / 進行中 / 完了)を更新する
-- タスクファイルの「受け入れ条件」を全て満たしてから完了にする。満たせないものが
-  あれば理由をタスクファイルに追記する
+- 着手時に対象 issue へ `status:in-progress` ラベルを付ける。完了はマージ時の
+  自動クローズに任せ、手動でクローズしない
+- issue の「受け入れ条件」を全て満たしてから完了にする。満たせないものが
+  あれば理由を issue にコメントで残す
 - API のエンドポイントを追加・変更したら、同じ PR で `docs/api.md` を更新する
 - マイグレーションを追加したら、同じ PR で `docs/schema.md` を更新する
-- 仕様を変えたくなったら、docs を先に直してから実装する(実装に合わせて docs を後追いさせない)
+- 仕様を変えたくなったら、docs と対象 issue の本文を先に直してから実装する
+  (実装に合わせて docs を後追いさせない)
 - backend のコードを書いたら必ずテストを書く(RSpec)
 - RSpec のテスト用インスタンスは `let` / `let!` で定義し、example 内で直接生成しない
 - コミットメッセージ・コメント・ドキュメントは日本語
 
 ## コマンド
+
+### タスク(GitHub issue)
+
+```bash
+gh issue view 22                                   # 追跡 issue(一覧・依存グラフ)
+gh issue list --label task --state open            # 残りのタスク
+gh issue view <番号>                                # タスクの詳細
+gh issue edit <番号> --add-label status:in-progress # 着手をマーク
+gh issue comment <番号> --body "..."                # 未達の受け入れ条件などを残す
+```
 
 ### backend(Docker 前提。ホストに Ruby は不要)
 

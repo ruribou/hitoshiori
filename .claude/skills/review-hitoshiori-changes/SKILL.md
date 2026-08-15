@@ -32,7 +32,7 @@ description: ひとしおりリポジトリの差分やPRをレビューし、�
 2. 少なくとも次を確認する。
    - `docs/product.md`: 設計原則とMVPスコープ。判断に迷ったらここが優先
    - `docs/api.md`と`docs/schema.md`: API・DBの契約(確定版)
-   - 対象タスクの`docs/tasks/NN-*.md`があれば、やること、やらないこと、受け入れ条件
+   - 対象タスクのissue(PR本文の`Closes #N`から特定。`gh issue view <番号>`)があれば、やること、やらないこと、受け入れ条件
 3. `git diff --stat <base>...HEAD`を控える。指示書の「差分の内訳」にそのまま貼る。
 4. 依存バージョンを実ファイルで確認する(`backend/Gemfile.lock`、`ios/project.yml`など)。
    非推奨APIやフレームワーク挙動を指摘するなら、バージョンの裏取りが前提になる。
@@ -101,7 +101,7 @@ description: ひとしおりリポジトリの差分やPRをレビューし、�
 ## 前提
 
 - ブランチ: `<head>`(`<base>` からの差分をレビュー)
-- 対象タスク: `docs/tasks/NN-*.md`(スコープの1行要約)
+- 対象タスク: issue #N(スコープの1行要約)
 - 作業規約は `AGENTS.md` を読むこと。コミットメッセージ・コメント・docs は日本語
 - テスト: `docker compose exec backend bundle exec rspec`
 - 依存バージョン: Rails 8 / PostgreSQL 17 など、指摘の根拠になるもの
