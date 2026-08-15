@@ -70,7 +70,11 @@ struct RecordViewModelTests {
     @Test("取得失敗後に再読み込みすると人物候補を回復できる")
     func recoversPeopleWhenLoadingIsRetried() async {
         let client = StubRecordAPIClient()
-        client.peopleResults = [.failure(.unavailable), .success([person(id: 1, name: "たなか")])]
+        client.healthResults = [.success(200), .success(200)]
+        client.peopleResults = [
+            .failure(StubError.unavailable),
+            .success([person(id: 1, name: "たなか")])
+        ]
         client.tagResults = [.success([]), .success([])]
         let viewModel = RecordViewModel(client: client)
 
@@ -100,7 +104,7 @@ struct RecordViewModelTests {
     @Test("取得失敗は理由を表示する")
     func showsErrorWhenLoadingPeopleFails() async {
         let client = StubRecordAPIClient()
-        client.peopleResults = [.failure(.unavailable)]
+        client.peopleResults = [.failure(StubError.unavailable)]
         let viewModel = RecordViewModel(client: client)
 
         await viewModel.load()
@@ -111,7 +115,7 @@ struct RecordViewModelTests {
     @Test("保存に失敗しても入力内容を保持し、名前を直すとエラーを消す")
     func preservesInputAndClearsErrorWhenNameChanges() async {
         let client = StubRecordAPIClient()
-        client.createEncounterResult = .failure(.unavailable)
+        client.createEncounterResults = [.failure(StubError.unavailable)]
         let viewModel = RecordViewModel(client: client)
         viewModel.updateName("たなか")
         viewModel.topic = "勉強会"
@@ -199,6 +203,21 @@ struct RecordViewModelTests {
         #expect(viewModel.memo == "手修正後のメモ")
     }
 
+    @Test("画面遷移時の停止で最終文字起こしをメモへ反映する")
+    func finishesVoiceMemoWhenLeavingRecordView() async {
+        let transcriber = StubSpeechTranscriber()
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+        viewModel.memo = "手入力したメモ"
+        transcriber.finalTranscript = "最終結果"
+
+        await viewModel.startVoiceMemo(using: transcriber)
+        await viewModel.stopVoiceMemo(using: transcriber)
+
+        #expect(transcriber.stopAndWaitCallCount == 1)
+        #expect(transcriber.state == .idle)
+        #expect(viewModel.memo == "手入力したメモ\n最終結果")
+    }
+
     @Test("保存前に音声文字起こしを終了して最終結果を送る")
     func savesAfterFinishingVoiceMemo() async {
         let client = StubRecordAPIClient()
@@ -215,9 +234,6 @@ struct RecordViewModelTests {
         #expect(client.createCalls.last?.memo == "最終結果")
     }
 
-    private func person(id: Int, name: String) -> Person {
-        Person(id: id, name: name, note: "", lastEncounteredAt: nil, encountersCount: 0)
-    }
 }
 
 @MainActor
@@ -230,25 +246,14 @@ private final class StubRecordAPIClient: RecordAPIClient {
         let tagNames: [String]
     }
 
-    enum StubError: Error, LocalizedError {
-        case unavailable
-
-        var errorDescription: String? {
-            switch self {
-            case .unavailable:
-                "接続できませんでした"
-            }
-        }
-    }
-
-    var healthResults: [Result<Int, StubError>] = [.success(200)]
-    var peopleResults: [Result<[Person], StubError>] = [.success([])]
-    var tagResults: [Result<[Hitoshiori.Tag], StubError>] = [.success([])]
-    var createEncounterResult: Result<Encounter, StubError> = .success(.fixture)
+    var healthResults: [Result<Int, Error>] = [.success(200)]
+    var peopleResults: [Result<[Person], Error>] = [.success([])]
+    var tagResults: [Result<[Hitoshiori.Tag], Error>] = [.success([])]
+    var createEncounterResults: [Result<Encounter, Error>] = [.success(.fixture)]
     private(set) var createCalls: [CreateEncounterCall] = []
 
     func health() async throws -> Int {
-        try nextResult(from: &healthResults, default: 200)
+        try nextResult(from: &healthResults)
     }
 
     func createEncounter(
@@ -267,23 +272,15 @@ private final class StubRecordAPIClient: RecordAPIClient {
                 tagNames: tagNames
             )
         )
-        return try createEncounterResult.get()
+        return try nextResult(from: &createEncounterResults)
     }
 
     func fetchPeople() async throws -> [Person] {
-        try nextResult(from: &peopleResults, default: [])
+        try nextResult(from: &peopleResults)
     }
 
     func fetchTags() async throws -> [Hitoshiori.Tag] {
-        try nextResult(from: &tagResults, default: [])
-    }
-
-    private func nextResult<Value>(
-        from results: inout [Result<Value, StubError>],
-        default defaultValue: Value
-    ) throws -> Value {
-        guard !results.isEmpty else { return defaultValue }
-        return try results.removeFirst().get()
+        try nextResult(from: &tagResults)
     }
 }
 

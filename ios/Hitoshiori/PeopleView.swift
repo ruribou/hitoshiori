@@ -2,48 +2,48 @@ import SwiftUI
 
 @MainActor
 struct PeopleListView: View {
-    @State private var viewModel: PeopleListViewModel
+    @State private var store: PeopleStore
 
     private let client: any PeopleAPIClient
 
-    init(client: any PeopleAPIClient = APIClient.development) {
+    init(
+        store: PeopleStore = PeopleStore(),
+        client: any PeopleAPIClient = APIClient.development
+    ) {
+        _store = State(initialValue: store)
         self.client = client
-        _viewModel = State(initialValue: PeopleListViewModel(client: client))
     }
 
     var body: some View {
         NavigationStack {
             List {
-                if viewModel.people.isEmpty, !viewModel.isLoading, viewModel.errorMessage == nil {
+                ForEach(store.people, id: \.id) { person in
+                    NavigationLink(value: person.id) {
+                        PersonRow(person: person)
+                    }
+                }
+
+                if let errorMessage = store.errorMessage {
+                    ErrorMessageRow(message: errorMessage)
+                }
+            }
+            .overlay {
+                if !store.hasLoaded {
+                    ProgressView("人物を読み込み中…")
+                } else if store.people.isEmpty, store.errorMessage == nil {
                     ContentUnavailableView(
                         "まだ人物の記録はありません",
                         systemImage: "person.2",
                         description: Text("記録すると、ここに人が並びます")
                     )
-                } else {
-                    ForEach(viewModel.people, id: \.id) { person in
-                        NavigationLink {
-                            PersonDetailView(personID: person.id, client: client) {
-                                await viewModel.load()
-                            }
-                        } label: {
-                            PersonRow(person: person)
-                        }
-                    }
-                }
-
-                if let errorMessage = viewModel.errorMessage {
-                    ErrorMessageRow(message: errorMessage)
-                }
-            }
-            .overlay {
-                if viewModel.isLoading, viewModel.people.isEmpty {
-                    ProgressView("人物を読み込み中…")
                 }
             }
             .navigationTitle("人物")
-            .refreshable { await viewModel.load() }
-            .task { await viewModel.load() }
+            .refreshable { await store.load() }
+            .task { await store.load() }
+            .navigationDestination(for: Int.self) { personID in
+                PersonDetailView(personID: personID, client: client, peopleStore: store)
+            }
         }
     }
 }
@@ -51,21 +51,22 @@ struct PeopleListView: View {
 @MainActor
 struct PersonDetailView: View {
     let personID: Int
-    let didUpdate: @MainActor () async -> Void
 
     @State private var viewModel: PersonDetailViewModel
     @State private var isEditing = false
+    @State private var didSaveEdit = false
     @State private var draftName = ""
     @State private var draftNote = ""
 
     init(
         personID: Int,
         client: any PeopleAPIClient = APIClient.development,
-        didUpdate: @escaping @MainActor () async -> Void = {}
+        peopleStore: PeopleStore? = nil
     ) {
         self.personID = personID
-        self.didUpdate = didUpdate
-        _viewModel = State(initialValue: PersonDetailViewModel(client: client))
+        _viewModel = State(
+            initialValue: PersonDetailViewModel(client: client, peopleStore: peopleStore)
+        )
     }
 
     var body: some View {
@@ -101,7 +102,7 @@ struct PersonDetailView: View {
             }
         }
         .overlay {
-            if viewModel.isLoading, viewModel.person == nil {
+            if !viewModel.hasLoaded {
                 ProgressView("人物を読み込み中…")
             }
         }
@@ -117,7 +118,7 @@ struct PersonDetailView: View {
         }
         .refreshable { await viewModel.load(id: personID) }
         .task { await viewModel.load(id: personID) }
-        .sheet(isPresented: $isEditing) {
+        .sheet(isPresented: $isEditing, onDismiss: cancelEditingIfNeeded) {
             editor
         }
     }
@@ -136,9 +137,7 @@ struct PersonDetailView: View {
 
                 if let errorMessage = viewModel.errorMessage {
                     Section {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                        ErrorMessageLabel(message: errorMessage)
                     }
                 }
             }
@@ -161,8 +160,8 @@ struct PersonDetailView: View {
                             )
                             guard didSave else { return }
 
+                            didSaveEdit = true
                             isEditing = false
-                            await didUpdate()
                         }
                     }
                     .disabled(viewModel.isSaving)
@@ -177,8 +176,14 @@ struct PersonDetailView: View {
 
         draftName = person.name
         draftNote = person.note
+        didSaveEdit = false
         viewModel.beginEditing()
         isEditing = true
+    }
+
+    private func cancelEditingIfNeeded() {
+        guard !didSaveEdit else { return }
+        viewModel.cancelEditing()
     }
 }
 
@@ -232,9 +237,7 @@ private struct ErrorMessageRow: View {
     let message: String
 
     var body: some View {
-        Label(message, systemImage: "exclamationmark.triangle.fill")
-            .font(.footnote)
-            .foregroundStyle(.red)
+        ErrorMessageLabel(message: message)
     }
 }
 

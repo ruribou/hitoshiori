@@ -2,8 +2,7 @@ import Foundation
 import Observation
 
 @MainActor
-protocol PeopleAPIClient: Sendable {
-    func fetchPeople() async throws -> [Person]
+protocol PeopleAPIClient: PeopleFetching {
     func fetchPerson(id: Int) async throws -> PersonDetail
     func updatePerson(id: Int, name: String, note: String) async throws -> UpdatedPerson
 }
@@ -12,57 +11,47 @@ extension APIClient: PeopleAPIClient {}
 
 @MainActor
 @Observable
-final class PeopleListViewModel {
-    var people: [Person] = []
-    var isLoading = false
-    var errorMessage: String?
-
-    private let client: any PeopleAPIClient
-
-    init(client: any PeopleAPIClient = APIClient.development) {
-        self.client = client
-    }
-
-    func load() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-
-        do {
-            people = try await client.fetchPeople()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-}
-
-@MainActor
-@Observable
 final class PersonDetailViewModel {
     var person: PersonDetail?
     var isLoading = false
+    private(set) var hasLoaded = false
     var isSaving = false
     var errorMessage: String?
 
     private let client: any PeopleAPIClient
+    private let peopleStore: PeopleStore
 
-    init(client: any PeopleAPIClient = APIClient.development) {
+    init(
+        client: any PeopleAPIClient = APIClient.development,
+        peopleStore: PeopleStore? = nil
+    ) {
         self.client = client
+        self.peopleStore = peopleStore ?? PeopleStore(client: client)
     }
 
     func load(id: Int) async {
+        guard !isLoading else { return }
+
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            hasLoaded = true
+        }
 
         do {
             person = try await client.fetchPerson(id: id)
         } catch {
+            guard !RequestFailure.isCancellation(error) else { return }
             errorMessage = error.localizedDescription
         }
     }
 
     func beginEditing() {
+        errorMessage = nil
+    }
+
+    func cancelEditing() {
         errorMessage = nil
     }
 
@@ -78,13 +67,28 @@ final class PersonDetailViewModel {
         defer { isSaving = false }
 
         do {
-            _ = try await client.updatePerson(id: id, name: trimmedName, note: note)
+            let updatedPerson = try await client.updatePerson(id: id, name: trimmedName, note: note)
+            apply(updatedPerson, toCurrentPersonWithID: id)
+            peopleStore.apply(updatedPerson)
             await load(id: id)
             return true
         } catch {
+            guard !RequestFailure.isCancellation(error) else { return false }
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    private func apply(_ updatedPerson: UpdatedPerson, toCurrentPersonWithID id: Int) {
+        guard let person, person.id == id else { return }
+
+        self.person = PersonDetail(
+            id: updatedPerson.id,
+            name: updatedPerson.name,
+            note: updatedPerson.note,
+            lastEncounteredAt: updatedPerson.lastEncounteredAt,
+            encounters: person.encounters
+        )
     }
 }
 
@@ -107,8 +111,6 @@ enum EncounterDateText {
         return switch dayCount {
         case ...0:
             "今日"
-        case 1:
-            "1日前"
         default:
             "\(dayCount)日前"
         }
