@@ -22,4 +22,15 @@ RSpec.describe Person, type: :model do
       end
     end
   end
+
+  describe "関連する想起記録" do
+    let(:person) { described_class.create!(name: "想起対象の人") }
+    let!(:reminder) { Reminder.create!(person: person, remind_on: Date.current) }
+
+    it "人物を削除すると一緒に削除される" do
+      expect { person.destroy! }.to change(Reminder, :count).by(-1)
+
+      expect(Reminder.exists?(reminder.id)).to be(false)
+    end
+  end
 end

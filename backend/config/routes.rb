@@ -5,6 +5,7 @@ Rails.application.routes.draw do
       resources :people, only: [ :index, :show ]
       patch "people/:id", to: "people#update", as: :person_update
       resources :tags, only: :index
+      get "reminders/today", to: "reminders#today"
     end
   end
 
