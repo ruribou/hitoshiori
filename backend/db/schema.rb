@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_14_000004) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_15_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -39,6 +39,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_000004) do
     t.index ["last_encountered_at"], name: "index_people_on_last_encountered_at"
   end
 
+  create_table "reminders", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "person_id", null: false
+    t.date "remind_on", null: false
+    t.datetime "updated_at", null: false
+    t.index ["person_id"], name: "index_reminders_on_person_id"
+    t.index ["remind_on"], name: "index_reminders_on_remind_on", unique: true
+  end
+
   create_table "tags", force: :cascade do |t|
     t.string "name", null: false
     t.index ["name"], name: "index_tags_on_name", unique: true
@@ -47,4 +56,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_000004) do
   add_foreign_key "encounter_tags", "encounters"
   add_foreign_key "encounter_tags", "tags"
   add_foreign_key "encounters", "people"
+  add_foreign_key "reminders", "people"
 end
