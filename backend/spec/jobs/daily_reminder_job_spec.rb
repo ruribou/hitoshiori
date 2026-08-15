@@ -13,6 +13,11 @@ RSpec.describe DailyReminderJob, type: :job do
   end
 
   before do
+    Reminder.delete_all
+    EncounterTag.delete_all
+    Encounter.delete_all
+    Tag.delete_all
+    Person.delete_all
     eligible_person.update_columns(last_encountered_at: reference_time - 60.days)
     next_eligible_person.update_columns(last_encountered_at: reference_time - 45.days)
     recent_person.update_columns(last_encountered_at: reference_time - 29.days)

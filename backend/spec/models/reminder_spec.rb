@@ -9,6 +9,14 @@ RSpec.describe Reminder, type: :model do
     travel_to(reference_time) { example.run }
   end
 
+  before do
+    described_class.delete_all
+    EncounterTag.delete_all
+    Encounter.delete_all
+    Tag.delete_all
+    Person.delete_all
+  end
+
   describe ".create_for_today!" do
     let(:oldest_person) { person_with_last_encounter("いちばん久しぶりの人", reference_time - 60.days) }
     let(:next_person) { person_with_last_encounter("次に久しぶりの人", reference_time - 45.days) }

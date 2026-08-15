@@ -17,7 +17,7 @@ RSpec.describe "Reminders API", type: :request do
       topic: "ハッカソンで同じチーム"
     )
   end
-  let(:tag) { Tag.create!(name: "ハッカソン") }
+  let(:tag) { Tag.create!(name: "想起API用タグ") }
   let(:reminder) do
     latest_encounter.tags << tag
     older_encounter
@@ -47,7 +47,7 @@ RSpec.describe "Reminders API", type: :request do
             "last_encounter" => {
               "met_at" => "2026-07-15T03:00:00Z",
               "topic" => "ハッカソンで同じチーム",
-              "tags" => [ { "id" => tag.id, "name" => "ハッカソン" } ]
+              "tags" => [ { "id" => tag.id, "name" => "想起API用タグ" } ]
             }
           }
         }
