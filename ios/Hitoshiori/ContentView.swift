@@ -11,7 +11,7 @@ struct ContentView: View {
 
     @State private var status: Status = .checking
 
-    private let client = BackendClient.development
+    private let client = APIClient.development
 
     var body: some View {
         VStack(spacing: 24) {
