@@ -62,11 +62,7 @@ module Api
 
         {
           encounter: EncounterPresenter.serialize(encounter, tags: tags).merge(
-            person: {
-              id: person.id,
-              name: person.name,
-              last_encountered_at: TimestampPresenter.serialize(person.last_encountered_at)
-            }
+            person: PersonPresenter.serialize(person).slice(:id, :name, :last_encountered_at)
           )
         }
       end

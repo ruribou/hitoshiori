@@ -21,7 +21,7 @@ module Api
         form = People::UpdateForm.new(person: person, parameters: require_object_param(:person))
 
         if form.save
-          render json: { person: person_attributes(person) }
+          render json: { person: PersonPresenter.serialize(person) }
         else
           render_validation_errors(form.errors.to_hash)
         end
@@ -31,22 +31,13 @@ module Api
 
       def person_summary(person)
         # with_encounters_countで付与される仮想属性を一覧レスポンスに含める。
-        person_attributes(person).merge(encounters_count: person.encounters_count.to_i)
+        PersonPresenter.serialize(person).merge(encounters_count: person.encounters_count.to_i)
       end
 
       def person_detail(person, encounters)
-        person_attributes(person).merge(
+        PersonPresenter.serialize(person).merge(
           encounters: encounters.map { |encounter| EncounterPresenter.serialize(encounter) }
         )
-      end
-
-      def person_attributes(person)
-        {
-          id: person.id,
-          name: person.name,
-          note: person.note,
-          last_encountered_at: TimestampPresenter.serialize(person.last_encountered_at)
-        }
       end
     end
   end

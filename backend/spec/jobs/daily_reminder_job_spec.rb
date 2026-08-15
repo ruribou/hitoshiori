@@ -13,23 +13,21 @@ RSpec.describe DailyReminderJob, type: :job do
   end
 
   before do
-    Reminder.delete_all
-    EncounterTag.delete_all
-    Encounter.delete_all
-    Tag.delete_all
-    Person.delete_all
     eligible_person.update_columns(last_encountered_at: reference_time - 60.days)
     next_eligible_person.update_columns(last_encountered_at: reference_time - 45.days)
     recent_person.update_columns(last_encountered_at: reference_time - 29.days)
   end
 
   it "同日に2回実行してもReminderを1件だけ作る" do
+    allow(Rails.logger).to receive(:info)
+
     described_class.perform_now
     described_class.perform_now
 
     expect(Reminder.where(remind_on: Date.current)).to contain_exactly(
       have_attributes(person: eligible_person, remind_on: Date.current)
     )
+    expect(Rails.logger).to have_received(:info).with("日次想起は当日分が既に作成されているためスキップしました")
   end
 
   it "候補がなければ正常終了する" do

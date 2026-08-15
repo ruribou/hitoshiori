@@ -188,6 +188,7 @@ Rails 組み込みヘルスチェック。アプリが起動していれば 200�
 
 - iOS はアプリ起動時・通知タップ時にこれを叩いて「今日の一人」画面を出す
 - 対象がいない日(候補ゼロ・バッチ未実行)は `reminder: null` を返す(404 にはしない)
+- 未接触の人物が対象の場合、`person.last_encountered_at` と `person.last_encounter` は `null` を返す
 
 レスポンス `200 OK`
 

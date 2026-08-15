@@ -50,8 +50,9 @@ erDiagram
 | `created_at` / `updated_at` | datetime | | |
 
 - `last_encountered_at` は **encounters から都度 MAX を引かず、非正規化して持つ**(確定)。
-  想起バッチが「30 日以上会っていない人」を index scan で引けるようにするため。
+  想起バッチが「30 日以上会っていない人」と未接触の人を効率よく引けるようにするため。
   更新責務は Encounter モデルに置く(作成・削除時に person の値を再計算)。
+- `last_encountered_at` が `null` の未接触の人も想起候補に含め、接触済みの候補より先に扱う。
 - 同名の人物は別レコードとして許容する。名寄せはしない(MVP)。
 
 ### encounters
@@ -98,6 +99,9 @@ erDiagram
 - `remind_on` 単独の unique index が「1 日 1 人」の保証そのもの。
   バッチが多重起動しても 2 件目は挿入できない(ジョブ側は rescue して無視)。
 - `[person_id, remind_on]` ではなく `remind_on` 単独が unique である点に注意。
+- 想起候補は未接触(`last_encountered_at` が `null`)を先頭に、その後は
+  `last_encountered_at` と `id` の昇順で選ぶ。同日時の人物は `id` が小さい方を優先する。
+- `remind_on` が当日を含む直近 30 日(`Date.current - 30.days..Date.current`)の人物は候補から除外する。
 
 ## 決定済み事項(旧・未決事項)
 

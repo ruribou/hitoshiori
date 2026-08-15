@@ -23,6 +23,11 @@ RSpec.describe "Reminders API", type: :request do
     older_encounter
     Reminder.create!(person: person, remind_on: Date.current)
   end
+  let(:yesterday_reminder) { Reminder.create!(person: person, remind_on: Date.current - 1.day) }
+  let(:unencountered_person) { Person.create!(name: "未接触の想起対象") }
+  let(:unencountered_reminder) do
+    Reminder.create!(person: unencountered_person, remind_on: Date.current)
+  end
 
   around do |example|
     travel_to(reference_time) { example.run }
@@ -54,11 +59,66 @@ RSpec.describe "Reminders API", type: :request do
       )
     end
 
+    it "最新接触を1件だけ取得する" do
+      reminder
+
+      queries = capture_select_queries { get "/api/v1/reminders/today", as: :json }
+      encounter_queries = queries.grep(/FROM "encounters"/)
+
+      expect(response).to have_http_status(:ok)
+      expect(encounter_queries).to contain_exactly(
+        a_string_matching(/ORDER BY "encounters"\."met_at" DESC, "encounters"\."id" DESC LIMIT/)
+      )
+    end
+
+    it "未接触の想起対象はlast_encounterをnullで返す" do
+      unencountered_reminder
+
+      get "/api/v1/reminders/today", as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to eq(
+        "reminder" => {
+          "id" => unencountered_reminder.id,
+          "remind_on" => "2026-08-15",
+          "person" => {
+            "id" => unencountered_person.id,
+            "name" => "未接触の想起対象",
+            "note" => "",
+            "last_encountered_at" => nil,
+            "last_encounter" => nil
+          }
+        }
+      )
+    end
+
+    it "当日以外の想起対象しかなければnullを返す" do
+      yesterday_reminder
+
+      get "/api/v1/reminders/today", as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to eq("reminder" => nil)
+    end
+
     it "当日の想起対象がなければnullを返す" do
       get "/api/v1/reminders/today", as: :json
 
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body).to eq("reminder" => nil)
     end
+  end
+
+  def capture_select_queries
+    queries = []
+    subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+      sql = payload.fetch(:sql)
+      queries << sql if sql.start_with?("SELECT")
+    end
+
+    yield
+    queries
+  ensure
+    ActiveSupport::Notifications.unsubscribe(subscriber) if subscriber
   end
 end
