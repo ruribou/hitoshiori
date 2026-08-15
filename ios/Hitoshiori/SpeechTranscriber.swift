@@ -61,55 +61,67 @@ final class SpeechTranscriber {
             return
         }
 
-        cancelCurrentRecognition()
-        wasManuallyStopped = false
-
         do {
-            let request = SFSpeechAudioBufferRecognitionRequest()
-            request.shouldReportPartialResults = true
-            if recognizer.supportsOnDeviceRecognition {
-                request.requiresOnDeviceRecognition = true
-            }
-
-            let engine = AVAudioEngine()
-            let inputNode = engine.inputNode
-            let format = inputNode.outputFormat(forBus: 0)
-            let sessionID = UUID()
-
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-
-            inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { [weak request] buffer, _ in
-                request?.append(buffer)
-            }
-
-            recognitionRequest = request
-            audioEngine = engine
-            recognitionSessionID = sessionID
-            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-                Task { @MainActor [weak self] in
-                    guard let self, self.recognitionSessionID == sessionID else { return }
-
-                    if let result {
-                        self.transcript = result.bestTranscription.formattedString
-                    }
-
-                    if let error, !self.wasManuallyStopped {
-                        self.finishRecognition(with: error.localizedDescription)
-                    } else if result?.isFinal == true || self.wasManuallyStopped {
-                        self.finishRecognition()
-                    }
-                }
-            }
-
-            engine.prepare()
-            try engine.start()
+            try beginRecognition(with: recognizer)
             state = .recording
         } catch {
             cancelCurrentRecognition()
             wasManuallyStopped = false
             state = .unavailable
             errorMessage = "音声入力を開始できませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    private func beginRecognition(with recognizer: SFSpeechRecognizer) throws {
+        cancelCurrentRecognition()
+        wasManuallyStopped = false
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
+
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+        let sessionID = UUID()
+
+        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+        inputNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { [weak request] buffer, _ in
+            request?.append(buffer)
+        }
+
+        recognitionRequest = request
+        audioEngine = engine
+        recognitionSessionID = sessionID
+        recognitionTask = makeRecognitionTask(using: recognizer, request: request, sessionID: sessionID)
+
+        engine.prepare()
+        try engine.start()
+    }
+
+    private func makeRecognitionTask(
+        using recognizer: SFSpeechRecognizer,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        sessionID: UUID
+    ) -> SFSpeechRecognitionTask {
+        recognizer.recognitionTask(with: request) { [weak self] result, error in
+            Task { @MainActor [weak self] in
+                guard let self, self.recognitionSessionID == sessionID else { return }
+
+                if let result {
+                    self.transcript = result.bestTranscription.formattedString
+                }
+
+                if let error, !self.wasManuallyStopped {
+                    self.finishRecognition(with: error.localizedDescription)
+                } else if result?.isFinal == true || self.wasManuallyStopped {
+                    self.finishRecognition()
+                }
+            }
         }
     }
 
