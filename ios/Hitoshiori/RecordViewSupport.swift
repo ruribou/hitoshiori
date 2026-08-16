@@ -15,6 +15,9 @@ struct TodayReminderSection: View {
                 onRecord: recordReminderPerson,
                 onDismiss: onDismiss
             )
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
         }
         .confirmationDialog(
             "入力中の名前を「\(reminder.person.name)」に置き換えますか？",
@@ -53,7 +56,7 @@ struct TodayReminderCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.medium) {
             HStack {
                 Label("今日の一人", systemImage: "bookmark.fill")
                     .font(.headline)
@@ -70,9 +73,9 @@ struct TodayReminderCard: View {
             }
 
             Button(action: onShowPerson) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.small) {
                     Text(reminder.person.name)
-                        .font(.title3.weight(.semibold))
+                        .font(HitoshioriDesign.Typography.sectionTitle)
                         .foregroundStyle(.primary)
 
                     Text(EncounterDateText.relativeDescription(for: reminder.person.lastEncounteredAt))
@@ -99,7 +102,13 @@ struct TodayReminderCard: View {
                 .accessibilityLabel("この人で記録をはじめる")
                 .accessibilityHint("人物を選択して、下の記録するボタンで保存します")
         }
-        .padding(.vertical, 4)
+        .padding(HitoshioriDesign.Spacing.medium)
+        .background(
+            HitoshioriDesign.Palette.reminderBackground,
+            in: RoundedRectangle(cornerRadius: HitoshioriDesign.CornerRadius.card, style: .continuous)
+        )
+        .padding(.horizontal, HitoshioriDesign.Spacing.large)
+        .padding(.vertical, HitoshioriDesign.Spacing.xSmall)
     }
 }
 
@@ -109,7 +118,7 @@ struct TagListText: View {
     var body: some View {
         if !tags.isEmpty {
             Text(tags.map { "#\($0.name)" }.joined(separator: " "))
-                .font(.footnote)
+                .font(HitoshioriDesign.Typography.metadata)
                 .foregroundStyle(.tint)
         }
     }
@@ -135,11 +144,11 @@ struct BackendStatusIndicator: View {
                 .accessibilityLabel("backend に接続中")
         case .reachable:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(HitoshioriDesign.Palette.success)
                 .accessibilityLabel("backend に接続済み")
         case .unreachable:
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(HitoshioriDesign.Palette.danger)
                 .accessibilityLabel("backend に未接続")
         }
     }

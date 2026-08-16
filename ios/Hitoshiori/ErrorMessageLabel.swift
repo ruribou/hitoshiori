@@ -5,7 +5,7 @@ struct ErrorMessageLabel: View {
 
     var body: some View {
         Label(message, systemImage: "exclamationmark.triangle.fill")
-            .font(.footnote)
-            .foregroundStyle(.red)
+            .font(HitoshioriDesign.Typography.metadata)
+            .foregroundStyle(HitoshioriDesign.Palette.danger)
     }
 }

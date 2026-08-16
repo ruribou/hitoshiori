@@ -194,15 +194,15 @@ private struct PersonRow: View {
     let person: Person
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.xSmall) {
             Text(person.name)
                 .font(.body.weight(.semibold))
 
-            HStack(spacing: 8) {
+            HStack(spacing: HitoshioriDesign.Spacing.small) {
                 Text(EncounterDateText.relativeDescription(for: person.lastEncounteredAt))
                 Text("\(person.encountersCount)回記録")
             }
-            .font(.footnote)
+            .font(HitoshioriDesign.Typography.metadata)
             .foregroundStyle(.secondary)
         }
     }
@@ -212,7 +212,7 @@ private struct EncounterHistoryRow: View {
     let encounter: EncounterHistory
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.small) {
             Text(encounter.metAt.formatted(date: .abbreviated, time: .shortened))
                 .font(.subheadline.weight(.semibold))
 
@@ -224,7 +224,7 @@ private struct EncounterHistoryRow: View {
 
             if let memo = encounter.memo, !memo.isEmpty {
                 Text(memo)
-                    .font(.footnote)
+                    .font(HitoshioriDesign.Typography.metadata)
                     .foregroundStyle(.secondary)
             }
         }
