@@ -62,7 +62,7 @@ struct ReminderPerson: Codable, Equatable, Sendable {
     let name: String
     let note: String
     let lastEncounteredAt: Date?
-    let lastEncounter: ReminderEncounter
+    let lastEncounter: ReminderEncounter?
 }
 
 struct ReminderEncounter: Codable, Equatable, Sendable {

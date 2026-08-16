@@ -3,19 +3,22 @@ import SwiftUI
 @MainActor
 struct PeopleListView: View {
     @State private var store: PeopleStore
+    @Binding private var path: [Int]
 
     private let client: any PeopleAPIClient
 
     init(
         store: PeopleStore = PeopleStore(),
-        client: any PeopleAPIClient = APIClient.development
+        client: any PeopleAPIClient = APIClient.development,
+        path: Binding<[Int]>
     ) {
         _store = State(initialValue: store)
+        _path = path
         self.client = client
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 ForEach(store.people, id: \.id) { person in
                     NavigationLink(value: person.id) {
@@ -217,11 +220,7 @@ private struct EncounterHistoryRow: View {
                 Text(topic)
             }
 
-            if !encounter.tags.isEmpty {
-                Text(encounter.tags.map { "#\($0.name)" }.joined(separator: " "))
-                    .font(.footnote)
-                    .foregroundStyle(.tint)
-            }
+            TagListText(tags: encounter.tags)
 
             if let memo = encounter.memo, !memo.isEmpty {
                 Text(memo)
@@ -241,6 +240,14 @@ private struct ErrorMessageRow: View {
     }
 }
 
+private struct PeopleListPreview: View {
+    @State private var path: [Int] = []
+
+    var body: some View {
+        PeopleListView(path: $path)
+    }
+}
+
 #Preview("人物一覧") {
-    PeopleListView()
+    PeopleListPreview()
 }

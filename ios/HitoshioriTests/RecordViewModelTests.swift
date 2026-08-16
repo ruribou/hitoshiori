@@ -5,8 +5,8 @@ import Testing
 
 @MainActor
 struct RecordViewModelTests {
-    @Test("名前または既存人物があれば保存できる")
-    func canSaveWithNameOrSelectedPerson() {
+    @Test("名前または既存人物があり、保存中でなければ保存できる")
+    func canSaveWithPersonInputWhenNotSaving() {
         let viewModel = RecordViewModel(client: StubRecordAPIClient())
 
         #expect(!viewModel.canSave)
@@ -14,6 +14,66 @@ struct RecordViewModelTests {
         viewModel.updateName("たなか")
 
         #expect(viewModel.canSave)
+        viewModel.updateName(" \n ")
+        #expect(!viewModel.canSave)
+
+        viewModel.updateName("さとう")
+        viewModel.isSaving = true
+        #expect(!viewModel.canSave)
+    }
+
+    @Test("入力済みの人物は確認なしに今日の一人へ置き換えない")
+    func keepsInputWhenReminderPersonWouldReplaceIt() {
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+        viewModel.updateName("さとう")
+
+        let didSelect = viewModel.selectExistingPersonIfInputIsEmpty(id: 42, name: "たなか")
+
+        #expect(!didSelect)
+        #expect(viewModel.name == "さとう")
+        #expect(viewModel.selectedPerson == nil)
+
+        viewModel.selectExistingPerson(id: 42, name: "たなか")
+
+        #expect(viewModel.name == "たなか")
+        #expect(viewModel.selectedPerson?.id == 42)
+    }
+
+    @Test("ロード済みの人物を今日の一人として選ぶ")
+    func selectsLoadedPersonWhenReminderMatchesExistingPerson() async {
+        let client = StubRecordAPIClient()
+        client.peopleResults = [
+            .success([
+                Person(
+                    id: 42,
+                    name: "登録済みのたなか",
+                    note: "",
+                    lastEncounteredAt: nil,
+                    encountersCount: 7
+                )
+            ])
+        ]
+        let viewModel = RecordViewModel(client: client)
+
+        await viewModel.load()
+        viewModel.selectExistingPerson(id: 42, name: "たなか")
+
+        #expect(viewModel.name == "登録済みのたなか")
+        #expect(viewModel.selectedPerson?.encountersCount == 7)
+    }
+
+    @Test("今日の一人を既存人物として引き継いで記録する")
+    func savesTodayReminderPersonAsExistingPerson() async {
+        let client = StubRecordAPIClient()
+        let viewModel = RecordViewModel(client: client)
+
+        viewModel.selectExistingPerson(id: 42, name: "たなか")
+        viewModel.topic = "久しぶりに連絡した"
+        await viewModel.save()
+
+        #expect(viewModel.name == "")
+        #expect(client.createCalls.first?.person == .existing(id: 42))
+        #expect(client.createCalls.first?.topic == "久しぶりに連絡した")
     }
 
     @Test("入力名で既存人物をかな種別を問わず部分一致検索する")

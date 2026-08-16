@@ -1,47 +1,115 @@
 import SwiftUI
 import UIKit
 
+private enum AppTab: Hashable {
+    case record
+    case people
+}
+
 @MainActor
 struct ContentView: View {
-    @State private var peopleStore = PeopleStore()
+    @State private var peopleStore: PeopleStore
+    @State private var recordViewModel: RecordViewModel
+    @State private var transcriber: any SpeechTranscribing
+    @State private var reminderViewModel = TodayReminderViewModel()
+    @State private var notificationScheduler = LocalNotificationScheduler()
+    @State private var selectedTab: AppTab = .record
+    @State private var peoplePath: [Int] = []
+    @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        let store = PeopleStore()
+        _peopleStore = State(initialValue: store)
+        _recordViewModel = State(initialValue: RecordViewModel(peopleStore: store))
+        _transcriber = State(initialValue: SpeechTranscriber())
+    }
 
     var body: some View {
-        TabView {
-            RecordView(peopleStore: peopleStore)
+        TabView(selection: $selectedTab) {
+            RecordView(
+                viewModel: recordViewModel,
+                reminder: reminderViewModel.reminder,
+                isReminderVisible: reminderViewModel.isCardVisible,
+                reminderErrorMessage: reminderViewModel.errorMessage,
+                onShowPerson: showPerson,
+                onDismissReminder: reminderViewModel.dismissCard,
+                onRecordFinished: reminderViewModel.recordDidFinish,
+                transcriber: transcriber
+            )
                 .tabItem {
                     Label("記録", systemImage: "square.and.pencil")
                 }
+                .tag(AppTab.record)
 
-            PeopleListView(store: peopleStore)
+            PeopleListView(store: peopleStore, path: $peoplePath)
                 .tabItem {
                     Label("人物", systemImage: "person.2")
                 }
+                .tag(AppTab.people)
         }
+        .task { await reminderViewModel.load() }
+        .task { await notificationScheduler.configure() }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await reminderViewModel.load() }
+        }
+    }
+
+    private func showPerson(id: Int) {
+        selectedTab = .people
+        peoplePath = [id]
     }
 }
 
 @MainActor
 private struct RecordView: View {
-    @State private var viewModel: RecordViewModel
-    @State private var transcriber: any SpeechTranscribing
     @Environment(\.scenePhase) private var scenePhase
+    @Bindable private var viewModel: RecordViewModel
+    private let reminder: Reminder?
+    private let isReminderVisible: Bool
+    private let reminderErrorMessage: String?
+    private let onShowPerson: (Int) -> Void
+    private let onDismissReminder: () -> Void
+    private let onRecordFinished: (Bool, Int?) -> Void
+    private let transcriber: any SpeechTranscribing
 
     init(
-        peopleStore: PeopleStore,
-        transcriber: any SpeechTranscribing = SpeechTranscriber()
+        viewModel: RecordViewModel,
+        reminder: Reminder?,
+        isReminderVisible: Bool,
+        reminderErrorMessage: String?,
+        onShowPerson: @escaping (Int) -> Void,
+        onDismissReminder: @escaping () -> Void,
+        onRecordFinished: @escaping (Bool, Int?) -> Void,
+        transcriber: any SpeechTranscribing
     ) {
-        _viewModel = State(initialValue: RecordViewModel(peopleStore: peopleStore))
-        _transcriber = State(initialValue: transcriber)
+        _viewModel = Bindable(wrappedValue: viewModel)
+        self.reminder = reminder
+        self.isReminderVisible = isReminderVisible
+        self.reminderErrorMessage = reminderErrorMessage
+        self.onShowPerson = onShowPerson
+        self.onDismissReminder = onDismissReminder
+        self.onRecordFinished = onRecordFinished
+        self.transcriber = transcriber
     }
 
     var body: some View {
         Form {
+            if let reminder, isReminderVisible {
+                TodayReminderSection(
+                    reminder: reminder,
+                    viewModel: viewModel,
+                    onShowPerson: { onShowPerson(reminder.person.id) },
+                    onDismiss: onDismissReminder
+                )
+            }
+
             Section {
                 HStack {
                     Label("今日、誰と会った？", systemImage: "person.crop.circle.badge.plus")
                         .font(.title3.weight(.semibold))
                     Spacer()
-                    backendStatusLabel
+                    BackendStatusIndicator(status: viewModel.backendStatus)
                 }
 
                 TextField("名前・あだ名", text: Binding(
@@ -171,7 +239,7 @@ private struct RecordView: View {
 
             Section {
                 Button {
-                    Task { await viewModel.save(using: transcriber) }
+                    Task { await saveRecord() }
                 } label: {
                     HStack {
                         Spacer()
@@ -184,7 +252,7 @@ private struct RecordView: View {
                         Spacer()
                     }
                 }
-                .disabled(!viewModel.canSave || viewModel.isSaving)
+                .disabled(!viewModel.canSave)
             }
         }
         .overlay(alignment: .top) {
@@ -241,10 +309,11 @@ private struct RecordView: View {
     }
 
     private var displayedErrorMessage: String? {
-        let messages = [transcriber.errorMessage, viewModel.errorMessage]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-        return messages.isEmpty ? nil : messages.joined(separator: "\n")
+        ErrorMessageText.combined([
+            transcriber.errorMessage,
+            viewModel.errorMessage,
+            reminderErrorMessage
+        ])
     }
 
     @ViewBuilder
@@ -260,23 +329,15 @@ private struct RecordView: View {
         Task { await viewModel.stopVoiceMemo(using: transcriber) }
     }
 
-    @ViewBuilder
-    private var backendStatusLabel: some View {
-        switch viewModel.backendStatus {
-        case .checking:
-            Image(systemName: "ellipsis.circle")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("backend に接続中")
-        case .reachable:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .accessibilityLabel("backend に接続済み")
-        case .unreachable:
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.red)
-                .accessibilityLabel("backend に未接続")
-        }
+    private func saveRecord() async {
+        let reminderPersonID = reminder?.person.id
+        let selectedPersonID = viewModel.selectedPerson?.id
+
+        await viewModel.save(using: transcriber)
+
+        onRecordFinished(viewModel.didSave, selectedPersonID == reminderPersonID ? selectedPersonID : nil)
     }
+
 }
 
 private struct TagChip: View {

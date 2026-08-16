@@ -64,6 +64,10 @@ final class RecordViewModel {
     }
 
     var canSave: Bool {
+        !isSaving && hasPersonInput
+    }
+
+    private var hasPersonInput: Bool {
         selectedPerson != nil || !trimmedName.isEmpty
     }
 
@@ -100,6 +104,31 @@ final class RecordViewModel {
     func select(person: Person) {
         selectedPerson = person
         name = person.name
+    }
+
+    func selectExistingPerson(id: Int, name: String) {
+        if let person = people.first(where: { $0.id == id }) {
+            select(person: person)
+            return
+        }
+
+        select(
+            person: Person(
+                id: id,
+                name: name,
+                note: "",
+                lastEncounteredAt: nil,
+                encountersCount: 0
+            )
+        )
+    }
+
+    @discardableResult
+    func selectExistingPersonIfInputIsEmpty(id: Int, name: String) -> Bool {
+        guard !hasPersonInput else { return false }
+
+        selectExistingPerson(id: id, name: name)
+        return true
     }
 
     func updateName(_ updatedName: String) {
