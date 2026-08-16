@@ -42,11 +42,15 @@ Rails 8 API(backend)+ SwiftUI(ios)のモノレポ。
 
 ## コマンド
 
+よく使うものはルートの `Makefile` にまとめてある。一覧は `make help`。
+初回構築は `make setup`(backend の起動・疎通確認 + ios のツール導入・生成・ビルド)。
+以下は make ターゲットと、それが実行する素のコマンド。
+
 ### タスク(GitHub issue)
 
 ```bash
-gh issue view 22                                   # 追跡 issue(一覧・依存グラフ)
-gh issue list --label task --state open            # 残りのタスク
+gh issue view 22                                   # 追跡 issue(一覧・依存グラフ) = make track
+gh issue list --label task --state open            # 残りのタスク = make tasks
 gh issue view <番号>                                # タスクの詳細
 gh issue edit <番号> --add-label status:in-progress # 着手をマーク
 gh issue comment <番号> --body "..."                # 未達の受け入れ条件などを残す
@@ -55,34 +59,37 @@ gh issue comment <番号> --body "..."                # 未達の受け入れ条
 ### backend(Docker 前提。ホストに Ruby は不要)
 
 ```bash
-docker compose up -d                                  # 起動(db / backend / jobs)
-docker compose exec backend bundle exec rspec          # テスト
-docker compose exec backend bundle exec rubocop        # Ruby・RSpecのLint
-docker compose exec backend bin/ci                     # backendの全検証
-docker compose exec backend bin/rails db:migrate
-docker compose exec backend bin/rails g model Person  # ジェネレータ
-docker compose exec backend bin/rails c               # コンソール
-docker compose logs -f backend                        # ログ
-docker compose restart backend jobs                   # Gemfile 変更後の反映
+make up        # docker compose up -d --wait                    起動(db / backend / jobs)
+make be-test   # docker compose exec backend bundle exec rspec  テスト
+make be-lint   # docker compose exec backend bundle exec rubocop  Ruby・RSpecのLint
+make be-ci     # docker compose exec backend bin/ci             backendの全検証
+make be-migrate                                               # bin/rails db:migrate
+make be-rails ARGS="g model Person"                           # ジェネレータなど任意の rails
+make be-console                                               # bin/rails c
+make logs      # docker compose logs -f backend                 ログ
+make restart   # docker compose restart backend jobs            Gemfile 変更後の反映
 ```
 
-疎通確認: `curl -i http://localhost:3000/up` → 200
+`make be-test ARGS=spec/models/person_spec.rb` のように `ARGS` で引数を渡せる。
+tty のない環境から叩くときは `EXEC_FLAGS=-T` を付ける。
+
+疎通確認: `make health`(= `curl http://localhost:3000/up`)→ 200
 
 ### ios
 
 ```bash
-brew install xcode-build-server
-
-cd ios
-xcodegen generate    # project.yml から .xcodeproj を生成(.xcodeproj は git 管理外)
-xcode-build-server config -project Hitoshiori.xcodeproj -scheme Hitoshiori
-xcodebuild build -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
-xcodebuild test  -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
+make setup-ios   # 必要な CLI の導入 → xcodegen generate → buildServer.json 生成 → ビルド
+make ios-gen     # .xcodeproj(git 管理外)と buildServer.json を再生成
+make ios-build   # xcodebuild build -destination 'platform=iOS Simulator,name=iPhone 17'
+make ios-test    # xcodebuild test  同上
+make ios-lint    # swiftlint lint
 ```
 
+シミュレータを変えるときは `make ios-build SIMULATOR="iPhone 17 Pro"`。
+
 ターゲット構成・Info.plist・権限まわりの変更は `.xcodeproj` を直接触らず
-`ios/project.yml` を編集して `xcodegen generate` を再実行する。再生成後は
-`xcode-build-server config` で `buildServer.json` を作り直し、一度ビルドを通す。
+`ios/project.yml` を編集して `make ios-gen` を実行する(XcodeGen の再生成と
+`buildServer.json` の作り直しをまとめて行う)。その後 `make ios-build` で一度ビルドを通す。
 ソースファイルを追加した場合もビルドを通してコンパイル引数を更新する。
 
 ## 技術スタックの固定事項
