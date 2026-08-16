@@ -53,11 +53,11 @@ struct TodayReminderCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.large) {
             HStack {
                 Label("今日の一人", systemImage: "bookmark.fill")
                     .font(.headline)
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(HitoshioriDesign.Color.accent)
 
                 Spacer()
 
@@ -70,7 +70,7 @@ struct TodayReminderCard: View {
             }
 
             Button(action: onShowPerson) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.medium) {
                     Text(reminder.person.name)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
@@ -99,7 +99,12 @@ struct TodayReminderCard: View {
                 .accessibilityLabel("この人で記録をはじめる")
                 .accessibilityHint("人物を選択して、下の記録するボタンで保存します")
         }
-        .padding(.vertical, 4)
+        .padding(HitoshioriDesign.Spacing.large)
+        .background(
+            HitoshioriDesign.Color.reminderBackground,
+            in: RoundedRectangle(cornerRadius: HitoshioriDesign.CornerRadius.card, style: .continuous)
+        )
+        .padding(.vertical, HitoshioriDesign.Spacing.xSmall)
     }
 }
 
@@ -109,8 +114,8 @@ struct TagListText: View {
     var body: some View {
         if !tags.isEmpty {
             Text(tags.map { "#\($0.name)" }.joined(separator: " "))
-                .font(.footnote)
-                .foregroundStyle(.tint)
+                .font(HitoshioriDesign.Typography.metadata)
+                .foregroundStyle(HitoshioriDesign.Color.accent)
         }
     }
 }
@@ -135,11 +140,11 @@ struct BackendStatusIndicator: View {
                 .accessibilityLabel("backend に接続中")
         case .reachable:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(HitoshioriDesign.Color.success)
                 .accessibilityLabel("backend に接続済み")
         case .unreachable:
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(HitoshioriDesign.Color.danger)
                 .accessibilityLabel("backend に未接続")
         }
     }

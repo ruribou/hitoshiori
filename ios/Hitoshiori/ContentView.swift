@@ -107,7 +107,7 @@ private struct RecordView: View {
             Section {
                 HStack {
                     Label("今日、誰と会った？", systemImage: "person.crop.circle.badge.plus")
-                        .font(.title3.weight(.semibold))
+                        .font(HitoshioriDesign.Typography.sectionTitle)
                     Spacer()
                     BackendStatusIndicator(status: viewModel.backendStatus)
                 }
@@ -155,9 +155,9 @@ private struct RecordView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 82), spacing: 8)],
+                        columns: [GridItem(.adaptive(minimum: 82), spacing: HitoshioriDesign.Spacing.medium)],
                         alignment: .leading,
-                        spacing: 8
+                        spacing: HitoshioriDesign.Spacing.medium
                     ) {
                         ForEach(viewModel.tags, id: \.id) { tag in
                             TagChip(
@@ -168,7 +168,7 @@ private struct RecordView: View {
                             }
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, HitoshioriDesign.Spacing.xSmall)
                 }
 
                 TextField("新しいタグを1つ追加", text: $viewModel.newTagName)
@@ -191,22 +191,22 @@ private struct RecordView: View {
                     )
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(transcriber.isRecording ? .red : .accentColor)
+                .tint(transcriber.isRecording ? HitoshioriDesign.Color.danger : HitoshioriDesign.Color.accent)
                 .disabled(transcriber.isRequestingPermission || transcriber.isFinishing || transcriber.needsSettings)
 
                 if transcriber.isRecording {
                     Label("録音・文字起こし中", systemImage: "waveform")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(HitoshioriDesign.Color.danger)
                 } else if transcriber.isFinishing {
-                    HStack(spacing: 8) {
+                    HStack(spacing: HitoshioriDesign.Spacing.medium) {
                         ProgressView()
                         Text("文字起こしを完了中…")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 } else if transcriber.isRequestingPermission {
-                    HStack(spacing: 8) {
+                    HStack(spacing: HitoshioriDesign.Spacing.medium) {
                         ProgressView()
                         Text("マイクと音声認識を確認中…")
                             .font(.footnote)
@@ -245,7 +245,7 @@ private struct RecordView: View {
                         Spacer()
                         if viewModel.isSaving {
                             ProgressView()
-                                .padding(.trailing, 6)
+                                .padding(.trailing, HitoshioriDesign.Spacing.small)
                         }
                         Text("記録する")
                             .fontWeight(.semibold)
@@ -259,11 +259,11 @@ private struct RecordView: View {
             if viewModel.didSave {
                 Label("記録しました", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
+                    .foregroundStyle(HitoshioriDesign.Color.success)
+                    .padding(.horizontal, HitoshioriDesign.Spacing.xLarge)
+                    .padding(.vertical, HitoshioriDesign.Spacing.medium)
                     .background(.thinMaterial, in: Capsule())
-                    .padding(.top, 8)
+                    .padding(.top, HitoshioriDesign.Spacing.medium)
                     .transition(.opacity)
             }
         }
@@ -350,13 +350,16 @@ private struct TagChip: View {
             Text(name)
                 .font(.subheadline)
                 .lineLimit(1)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .padding(.horizontal, HitoshioriDesign.Spacing.regular)
+                .padding(.vertical, HitoshioriDesign.Spacing.small)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? .white : .primary)
-        .background(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemFill), in: Capsule())
+        .foregroundStyle(isSelected ? HitoshioriDesign.Color.selectedChipText : .primary)
+        .background(
+            isSelected ? HitoshioriDesign.Color.accent : HitoshioriDesign.Color.chipBackground,
+            in: Capsule()
+        )
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

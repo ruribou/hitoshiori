@@ -35,7 +35,8 @@ targets:
       path: Support/Info.plist
       properties:
         CFBundleDisplayName: ひとしおり
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         # 開発中に http://localhost:3000 の Rails を叩くため。

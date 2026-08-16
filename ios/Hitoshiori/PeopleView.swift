@@ -79,7 +79,7 @@ struct PersonDetailView: View {
                     LabeledContent("名前", value: person.name)
 
                     if !person.note.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.small) {
                             Text("メモ")
                                 .font(.subheadline.weight(.semibold))
                             Text(person.note)
@@ -194,15 +194,15 @@ private struct PersonRow: View {
     let person: Person
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.xSmall) {
             Text(person.name)
                 .font(.body.weight(.semibold))
 
-            HStack(spacing: 8) {
+            HStack(spacing: HitoshioriDesign.Spacing.medium) {
                 Text(EncounterDateText.relativeDescription(for: person.lastEncounteredAt))
                 Text("\(person.encountersCount)回記録")
             }
-            .font(.footnote)
+            .font(HitoshioriDesign.Typography.metadata)
             .foregroundStyle(.secondary)
         }
     }
@@ -212,7 +212,7 @@ private struct EncounterHistoryRow: View {
     let encounter: EncounterHistory
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.medium) {
             Text(encounter.metAt.formatted(date: .abbreviated, time: .shortened))
                 .font(.subheadline.weight(.semibold))
 
@@ -224,11 +224,11 @@ private struct EncounterHistoryRow: View {
 
             if let memo = encounter.memo, !memo.isEmpty {
                 Text(memo)
-                    .font(.footnote)
+                    .font(HitoshioriDesign.Typography.metadata)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, HitoshioriDesign.Spacing.xxSmall)
     }
 }
 
