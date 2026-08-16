@@ -1,6 +1,7 @@
 # XcodeGen が project.yml から生成するので追跡しない
 *.xcodeproj
 Support/Info.plist
+buildServer.json
 
 # Xcode
 DerivedData/

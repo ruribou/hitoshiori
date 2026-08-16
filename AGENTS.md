@@ -71,14 +71,19 @@ docker compose restart backend jobs                   # Gemfile 変更後の反�
 ### ios
 
 ```bash
+brew install xcode-build-server
+
 cd ios
 xcodegen generate    # project.yml から .xcodeproj を生成(.xcodeproj は git 管理外)
+xcode-build-server config -project Hitoshiori.xcodeproj -scheme Hitoshiori
 xcodebuild build -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
 xcodebuild test  -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 ターゲット構成・Info.plist・権限まわりの変更は `.xcodeproj` を直接触らず
-`ios/project.yml` を編集して `xcodegen generate` を再実行する。
+`ios/project.yml` を編集して `xcodegen generate` を再実行する。再生成後は
+`xcode-build-server config` で `buildServer.json` を作り直し、一度ビルドを通す。
+ソースファイルを追加した場合もビルドを通してコンパイル引数を更新する。
 
 ## 技術スタックの固定事項
 
