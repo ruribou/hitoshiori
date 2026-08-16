@@ -31,40 +31,23 @@ final class SystemLocalNotificationCenter: LocalNotificationCenter {
 
 @MainActor
 final class LocalNotificationScheduler {
-    static let authorizationRequestedKey = "hasRequestedDailyReminderNotificationAuthorization"
-
     private let center: any LocalNotificationCenter
-    private let defaults: UserDefaults
 
-    init(
-        center: any LocalNotificationCenter = SystemLocalNotificationCenter(),
-        defaults: UserDefaults = .standard
-    ) {
+    init(center: any LocalNotificationCenter = SystemLocalNotificationCenter()) {
         self.center = center
-        self.defaults = defaults
     }
 
     func configure() async {
-        await requestAuthorizationIfNeeded()
+        _ = try? await center.requestAuthorization(options: [.alert, .sound])
 
         center.removePendingNotificationRequests(withIdentifiers: [DailyReminderNotification.identifier])
         try? await center.add(DailyReminderNotification.makeRequest())
-    }
-
-    private func requestAuthorizationIfNeeded() async {
-        guard !defaults.bool(forKey: Self.authorizationRequestedKey) else { return }
-
-        do {
-            _ = try await center.requestAuthorization(options: [.alert, .sound])
-            defaults.set(true, forKey: Self.authorizationRequestedKey)
-        } catch {
-            // 次回の起動時に再試行する。通知の失敗は記録・閲覧を妨げない。
-        }
     }
 }
 
 enum DailyReminderNotification {
     static let identifier = "daily-reminder"
+    static let foregroundPresentationOptions: UNNotificationPresentationOptions = [.banner, .sound]
 
     static func makeRequest() -> UNNotificationRequest {
         let content = UNMutableNotificationContent()

@@ -3,27 +3,25 @@ import SwiftUI
 @MainActor
 struct PeopleListView: View {
     @State private var store: PeopleStore
-    @Binding private var presentedPersonID: Int?
+    @Binding private var path: [Int]
 
     private let client: any PeopleAPIClient
 
     init(
         store: PeopleStore = PeopleStore(),
         client: any PeopleAPIClient = APIClient.development,
-        presentedPersonID: Binding<Int?> = .constant(nil)
+        path: Binding<[Int]> = .constant([])
     ) {
         _store = State(initialValue: store)
-        _presentedPersonID = presentedPersonID
+        _path = path
         self.client = client
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 ForEach(store.people, id: \.id) { person in
-                    NavigationLink {
-                        PersonDetailView(personID: person.id, client: client, peopleStore: store)
-                    } label: {
+                    NavigationLink(value: person.id) {
                         PersonRow(person: person)
                     }
                 }
@@ -46,7 +44,7 @@ struct PeopleListView: View {
             .navigationTitle("人物")
             .refreshable { await store.load() }
             .task { await store.load() }
-            .navigationDestination(item: $presentedPersonID) { personID in
+            .navigationDestination(for: Int.self) { personID in
                 PersonDetailView(personID: personID, client: client, peopleStore: store)
             }
         }
@@ -222,11 +220,7 @@ private struct EncounterHistoryRow: View {
                 Text(topic)
             }
 
-            if !encounter.tags.isEmpty {
-                Text(encounter.tags.map { "#\($0.name)" }.joined(separator: " "))
-                    .font(.footnote)
-                    .foregroundStyle(.tint)
-            }
+            TagListText(tags: encounter.tags)
 
             if let memo = encounter.memo, !memo.isEmpty {
                 Text(memo)

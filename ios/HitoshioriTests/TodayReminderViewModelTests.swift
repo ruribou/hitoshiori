@@ -9,36 +9,114 @@ struct TodayReminderViewModelTests {
     func loadsTodayReminder() async {
         let client = StubTodayReminderClient()
         client.results = [.success(reminder(personName: "たなか"))]
-        let viewModel = TodayReminderViewModel(client: client)
+        let viewModel = makeViewModel(client: client)
 
         await viewModel.load()
 
         #expect(client.fetchCallCount == 1)
         #expect(viewModel.reminder?.person.name == "たなか")
+        #expect(viewModel.errorMessage == nil)
     }
 
     @Test("対象がいない日は表示対象を空にする")
     func clearsReminderWhenTodayHasNoTarget() async {
         let client = StubTodayReminderClient()
         client.results = [.success(reminder(personName: "たなか")), .success(nil)]
-        let viewModel = TodayReminderViewModel(client: client)
+        let referenceDate = ReferenceDate(value: date("2026-08-15T00:00:00Z"))
+        let viewModel = makeViewModel(client: client, referenceDate: referenceDate)
 
         await viewModel.load()
+        referenceDate.value = date("2026-08-16T00:00:00Z")
         await viewModel.load()
 
         #expect(viewModel.reminder == nil)
     }
 
-    @Test("取得に失敗しても前回の今日の一人を維持する")
-    func keepsReminderWhenLoadingFails() async {
+    @Test("同じ日に複数回呼んでも今日の一人は1回だけ取得する")
+    func loadsOnlyOncePerDay() async {
         let client = StubTodayReminderClient()
-        client.results = [.success(reminder(personName: "たなか")), .failure(StubError.unavailable)]
-        let viewModel = TodayReminderViewModel(client: client)
+        client.results = [.success(reminder(personName: "たなか"))]
+        let viewModel = makeViewModel(client: client)
 
         await viewModel.load()
+        await viewModel.load()
+
+        #expect(client.fetchCallCount == 1)
+    }
+
+    @Test("日付が変わると今日の一人を再取得する")
+    func reloadsWhenDayChanges() async {
+        let client = StubTodayReminderClient()
+        client.results = [.success(reminder(personName: "たなか")), .success(reminder(personName: "すずき"))]
+        let referenceDate = ReferenceDate(value: date("2026-08-15T00:00:00Z"))
+        let viewModel = makeViewModel(client: client, referenceDate: referenceDate)
+
+        await viewModel.load()
+        referenceDate.value = date("2026-08-16T00:00:00Z")
+        await viewModel.load()
+
+        #expect(client.fetchCallCount == 2)
+        #expect(viewModel.reminder?.person.name == "すずき")
+    }
+
+    @Test("取得に失敗しても前回の今日の一人を維持し、失敗を保持する")
+    func keepsReminderAndRecordsErrorWhenLoadingFails() async {
+        let client = StubTodayReminderClient()
+        client.results = [.success(reminder(personName: "たなか")), .failure(StubError.unavailable)]
+        let referenceDate = ReferenceDate(value: date("2026-08-15T00:00:00Z"))
+        let viewModel = makeViewModel(client: client, referenceDate: referenceDate)
+
+        await viewModel.load()
+        referenceDate.value = date("2026-08-16T00:00:00Z")
         await viewModel.load()
 
         #expect(viewModel.reminder?.person.name == "たなか")
+        #expect(viewModel.errorMessage == "接続できませんでした")
+    }
+
+    @Test("取得キャンセルは失敗として表示しない")
+    func doesNotRecordErrorWhenLoadingIsCancelled() async {
+        let client = StubTodayReminderClient()
+        client.results = [.failure(CancellationError())]
+        let viewModel = makeViewModel(client: client)
+
+        await viewModel.load()
+
+        #expect(viewModel.errorMessage == nil)
+    }
+
+    @Test("取得中の追加要求は捨てて二重に通信しない")
+    func ignoresLoadRequestWhileAlreadyLoading() async {
+        let client = StubTodayReminderClient()
+        client.delay = .milliseconds(20)
+        client.results = [.success(reminder(personName: "たなか"))]
+        let viewModel = makeViewModel(client: client)
+
+        let firstLoad = Task { @MainActor in await viewModel.load() }
+        await Task.yield()
+        await viewModel.load()
+        await firstLoad.value
+
+        #expect(client.fetchCallCount == 1)
+    }
+
+    @Test("未接触の人物には最後に会った日の接頭辞を表示しない")
+    func doesNotDescribeLastEncounterWhenPersonHasNoEncounter() {
+        #expect(ReminderCardText.lastEncounterDescription(for: nil) == nil)
+    }
+
+    private func makeViewModel(
+        client: StubTodayReminderClient,
+        referenceDate: ReferenceDate? = nil
+    ) -> TodayReminderViewModel {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        let resolvedReferenceDate = referenceDate ?? ReferenceDate(value: date("2026-08-15T00:00:00Z"))
+        return TodayReminderViewModel(
+            client: client,
+            calendar: calendar,
+            referenceDate: { resolvedReferenceDate.value }
+        )
     }
 
     private func reminder(personName: String) -> Reminder {
@@ -54,15 +132,32 @@ struct TodayReminderViewModelTests {
             )
         )
     }
+
+    private func date(_ value: String) -> Date {
+        ISO8601DateFormatter().date(from: value)!
+    }
+}
+
+@MainActor
+private final class ReferenceDate {
+    var value: Date
+
+    init(value: Date) {
+        self.value = value
+    }
 }
 
 @MainActor
 private final class StubTodayReminderClient: TodayReminderFetching {
     var results: [Result<Reminder?, Error>] = [.success(nil)]
+    var delay: Duration?
     private(set) var fetchCallCount = 0
 
     func fetchTodayReminder() async throws -> Reminder? {
         fetchCallCount += 1
+        if let delay {
+            try? await Task.sleep(for: delay)
+        }
         return try nextResult(from: &results)
     }
 }

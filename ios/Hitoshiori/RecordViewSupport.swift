@@ -1,5 +1,53 @@
 import SwiftUI
 
+struct TodayReminderSection: View {
+    let reminder: Reminder
+    @Bindable var viewModel: RecordViewModel
+    @Binding var isVisible: Bool
+    let onShowPerson: () -> Void
+    @State private var isConfirmingPersonReplacement = false
+
+    var body: some View {
+        Section {
+            TodayReminderCard(
+                reminder: reminder,
+                onShowPerson: onShowPerson,
+                onRecord: recordReminderPerson,
+                onDismiss: { isVisible = false }
+            )
+        }
+        .confirmationDialog(
+            "入力中の名前を「\(reminder.person.name)」に置き換えますか？",
+            isPresented: $isConfirmingPersonReplacement,
+            titleVisibility: .visible
+        ) {
+            Button("置き換える", role: .destructive) {
+                replacePersonInputWithReminder()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("入力中の人物は保存されません。")
+        }
+    }
+
+    private func recordReminderPerson() {
+        if viewModel.selectExistingPersonIfInputIsEmpty(
+            id: reminder.person.id,
+            name: reminder.person.name
+        ) {
+            isVisible = false
+            return
+        }
+
+        isConfirmingPersonReplacement = true
+    }
+
+    private func replacePersonInputWithReminder() {
+        viewModel.selectExistingPerson(id: reminder.person.id, name: reminder.person.name)
+        isVisible = false
+    }
+}
+
 struct TodayReminderCard: View {
     let reminder: Reminder
     let onShowPerson: () -> Void
@@ -28,9 +76,13 @@ struct TodayReminderCard: View {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
 
-                    Text("最後に会った日: \(EncounterDateText.relativeDescription(for: reminder.person.lastEncounteredAt))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    if let lastEncounterDescription = ReminderCardText.lastEncounterDescription(
+                        for: reminder.person.lastEncounteredAt
+                    ) {
+                        Text(lastEncounterDescription)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
 
                     if let lastEncounter = reminder.person.lastEncounter {
                         if let topic = lastEncounter.topic, !topic.isEmpty {
@@ -39,11 +91,7 @@ struct TodayReminderCard: View {
                                 .foregroundStyle(.primary)
                         }
 
-                        if !lastEncounter.tags.isEmpty {
-                            Text(lastEncounter.tags.map { "#\($0.name)" }.joined(separator: " "))
-                                .font(.footnote)
-                                .foregroundStyle(.tint)
-                        }
+                        TagListText(tags: lastEncounter.tags)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -55,6 +103,35 @@ struct TodayReminderCard: View {
                 .buttonStyle(.borderedProminent)
         }
         .padding(.vertical, 4)
+    }
+}
+
+enum ReminderCardText {
+    static func lastEncounterDescription(
+        for date: Date?,
+        relativeTo referenceDate: Date = .now,
+        calendar: Calendar = .current
+    ) -> String? {
+        guard let date else { return nil }
+
+        let relativeDescription = EncounterDateText.relativeDescription(
+            for: date,
+            relativeTo: referenceDate,
+            calendar: calendar
+        )
+        return "最後に会った日: \(relativeDescription)"
+    }
+}
+
+struct TagListText: View {
+    let tags: [Tag]
+
+    var body: some View {
+        if !tags.isEmpty {
+            Text(tags.map { "#\($0.name)" }.joined(separator: " "))
+                .font(.footnote)
+                .foregroundStyle(.tint)
+        }
     }
 }
 

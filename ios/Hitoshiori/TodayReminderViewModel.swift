@@ -13,23 +13,39 @@ extension APIClient: TodayReminderFetching {}
 final class TodayReminderViewModel {
     private(set) var reminder: Reminder?
     private(set) var isLoading = false
+    private(set) var errorMessage: String?
 
     private let client: any TodayReminderFetching
+    private let calendar: Calendar
+    private let referenceDate: () -> Date
+    private var loadedOn: Date?
 
-    init(client: any TodayReminderFetching = APIClient.development) {
+    init(
+        client: any TodayReminderFetching = APIClient.development,
+        calendar: Calendar = .current,
+        referenceDate: @escaping () -> Date = { .now }
+    ) {
         self.client = client
+        self.calendar = calendar
+        self.referenceDate = referenceDate
     }
 
-    func load() async {
+    func load(force: Bool = false) async {
         guard !isLoading else { return }
 
+        let today = calendar.startOfDay(for: referenceDate())
+        guard force || loadedOn != today else { return }
+
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
 
         do {
             reminder = try await client.fetchTodayReminder()
+            loadedOn = today
         } catch {
-            // 想起カードを取得できなくても、記録フローは妨げない。
+            guard !RequestFailure.isCancellation(error) else { return }
+            errorMessage = error.localizedDescription
         }
     }
 }

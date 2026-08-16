@@ -8,35 +8,43 @@ private enum AppTab: Hashable {
 
 @MainActor
 struct ContentView: View {
-    @State private var peopleStore = PeopleStore()
+    @State private var peopleStore: PeopleStore
+    @State private var recordViewModel: RecordViewModel
+    @State private var transcriber: any SpeechTranscribing
     @State private var reminderViewModel = TodayReminderViewModel()
     @State private var notificationScheduler = LocalNotificationScheduler()
     @State private var selectedTab: AppTab = .record
-    @State private var presentedPersonID: Int?
+    @State private var peoplePath: [Int] = []
     @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        let store = PeopleStore()
+        _peopleStore = State(initialValue: store)
+        _recordViewModel = State(initialValue: RecordViewModel(peopleStore: store))
+        _transcriber = State(initialValue: SpeechTranscriber())
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
             RecordView(
-                peopleStore: peopleStore,
+                viewModel: recordViewModel,
                 reminder: reminderViewModel.reminder,
-                onShowPerson: showPerson
+                onShowPerson: showPerson,
+                transcriber: transcriber
             )
                 .tabItem {
                     Label("記録", systemImage: "square.and.pencil")
                 }
                 .tag(AppTab.record)
 
-            PeopleListView(store: peopleStore, presentedPersonID: $presentedPersonID)
+            PeopleListView(store: peopleStore, path: $peoplePath)
                 .tabItem {
                     Label("人物", systemImage: "person.2")
                 }
                 .tag(AppTab.people)
         }
-        .task {
-            await notificationScheduler.configure()
-            await reminderViewModel.load()
-        }
+        .task { await reminderViewModel.load() }
+        .task { await notificationScheduler.configure() }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task { await reminderViewModel.load() }
@@ -45,48 +53,40 @@ struct ContentView: View {
 
     private func showPerson(id: Int) {
         selectedTab = .people
-        presentedPersonID = id
+        peoplePath = [id]
     }
 }
 
 @MainActor
 private struct RecordView: View {
-    @State private var viewModel: RecordViewModel
-    @State private var transcriber: any SpeechTranscribing
     @State private var isTodayReminderVisible = true
     @Environment(\.scenePhase) private var scenePhase
+    @Bindable private var viewModel: RecordViewModel
     private let reminder: Reminder?
     private let onShowPerson: (Int) -> Void
+    private let transcriber: any SpeechTranscribing
 
     init(
-        peopleStore: PeopleStore,
-        reminder: Reminder? = nil,
-        onShowPerson: @escaping (Int) -> Void = { _ in },
-        transcriber: any SpeechTranscribing = SpeechTranscriber()
+        viewModel: RecordViewModel,
+        reminder: Reminder?,
+        onShowPerson: @escaping (Int) -> Void,
+        transcriber: any SpeechTranscribing
     ) {
-        _viewModel = State(initialValue: RecordViewModel(peopleStore: peopleStore))
-        _transcriber = State(initialValue: transcriber)
+        _viewModel = Bindable(wrappedValue: viewModel)
         self.reminder = reminder
         self.onShowPerson = onShowPerson
+        self.transcriber = transcriber
     }
 
     var body: some View {
         Form {
             if let reminder, isTodayReminderVisible {
-                Section {
-                    TodayReminderCard(
-                        reminder: reminder,
-                        onShowPerson: { onShowPerson(reminder.person.id) },
-                        onRecord: {
-                            viewModel.selectExistingPerson(
-                                id: reminder.person.id,
-                                name: reminder.person.name
-                            )
-                            isTodayReminderVisible = false
-                        },
-                        onDismiss: { isTodayReminderVisible = false }
-                    )
-                }
+                TodayReminderSection(
+                    reminder: reminder,
+                    viewModel: viewModel,
+                    isVisible: $isTodayReminderVisible,
+                    onShowPerson: { onShowPerson(reminder.person.id) }
+                )
             }
 
             Section {

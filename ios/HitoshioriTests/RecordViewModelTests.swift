@@ -16,6 +16,57 @@ struct RecordViewModelTests {
         #expect(viewModel.canSave)
     }
 
+    @Test("人物入力の有無を空白を除いて判定する")
+    func detectsPersonInputWithoutCountingWhitespace() {
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+
+        viewModel.updateName(" \n ")
+        #expect(!viewModel.hasPersonInput)
+
+        viewModel.updateName("さとう")
+        #expect(viewModel.hasPersonInput)
+    }
+
+    @Test("入力済みの人物は確認なしに今日の一人へ置き換えない")
+    func keepsInputWhenReminderPersonWouldReplaceIt() {
+        let viewModel = RecordViewModel(client: StubRecordAPIClient())
+        viewModel.updateName("さとう")
+
+        let didSelect = viewModel.selectExistingPersonIfInputIsEmpty(id: 42, name: "たなか")
+
+        #expect(!didSelect)
+        #expect(viewModel.name == "さとう")
+        #expect(viewModel.selectedPerson == nil)
+
+        viewModel.selectExistingPerson(id: 42, name: "たなか")
+
+        #expect(viewModel.name == "たなか")
+        #expect(viewModel.selectedPerson?.id == 42)
+    }
+
+    @Test("ロード済みの人物を今日の一人として選ぶ")
+    func selectsLoadedPersonWhenReminderMatchesExistingPerson() async {
+        let client = StubRecordAPIClient()
+        client.peopleResults = [
+            .success([
+                Person(
+                    id: 42,
+                    name: "登録済みのたなか",
+                    note: "",
+                    lastEncounteredAt: nil,
+                    encountersCount: 7
+                )
+            ])
+        ]
+        let viewModel = RecordViewModel(client: client)
+
+        await viewModel.load()
+        viewModel.selectExistingPerson(id: 42, name: "たなか")
+
+        #expect(viewModel.name == "登録済みのたなか")
+        #expect(viewModel.selectedPerson?.encountersCount == 7)
+    }
+
     @Test("今日の一人を既存人物として引き継いで記録する")
     func savesTodayReminderPersonAsExistingPerson() async {
         let client = StubRecordAPIClient()

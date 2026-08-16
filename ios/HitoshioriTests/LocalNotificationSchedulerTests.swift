@@ -1,4 +1,3 @@
-import Foundation
 import Testing
 import UserNotifications
 
@@ -10,8 +9,7 @@ struct LocalNotificationSchedulerTests {
     func registersDailyNotificationAfterAuthorizationIsDenied() async throws {
         let center = StubLocalNotificationCenter()
         center.authorizationResults = [.success(false)]
-        let defaults = makeDefaults()
-        let scheduler = LocalNotificationScheduler(center: center, defaults: defaults)
+        let scheduler = LocalNotificationScheduler(center: center)
 
         await scheduler.configure()
 
@@ -29,48 +27,57 @@ struct LocalNotificationSchedulerTests {
         #expect(trigger.dateComponents.minute == 0)
     }
 
-    @Test("通知権限は初回だけ尋ね、通知は起動ごとに洗い替える")
-    func requestsAuthorizationOnceAndReplacesNotificationOnEveryLaunch() async {
+    @Test("通知許可を毎起動時に確認し、通知を洗い替える")
+    func requestsAuthorizationAndReplacesNotificationOnEveryLaunch() async {
         let center = StubLocalNotificationCenter()
-        let defaults = makeDefaults()
-        let scheduler = LocalNotificationScheduler(center: center, defaults: defaults)
+        center.authorizationResults = [.success(true), .success(true)]
+        let scheduler = LocalNotificationScheduler(center: center)
 
         await scheduler.configure()
         await scheduler.configure()
 
-        #expect(center.authorizationOptions.count == 1)
+        #expect(center.authorizationOptions.count == 2)
         #expect(center.removedRequestIdentifiers == [
             [DailyReminderNotification.identifier],
             [DailyReminderNotification.identifier]
         ])
         #expect(center.addedRequests.count == 2)
+        #expect(center.operations == [.authorization, .remove, .add, .authorization, .remove, .add])
     }
 
-    private func makeDefaults() -> UserDefaults {
-        let suiteName = "LocalNotificationSchedulerTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
-        return defaults
+    @Test("フォアグラウンドでもバナーと音を提示する")
+    func presentsForegroundNotificationWithBannerAndSound() {
+        #expect(DailyReminderNotification.foregroundPresentationOptions == [.banner, .sound])
     }
 }
 
 @MainActor
 private final class StubLocalNotificationCenter: LocalNotificationCenter {
+    enum Operation: Equatable {
+        case authorization
+        case remove
+        case add
+    }
+
     var authorizationResults: [Result<Bool, Error>] = [.success(true)]
     private(set) var authorizationOptions: [UNAuthorizationOptions] = []
     private(set) var removedRequestIdentifiers: [[String]] = []
     private(set) var addedRequests: [UNNotificationRequest] = []
+    private(set) var operations: [Operation] = []
 
     func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool {
+        operations.append(.authorization)
         authorizationOptions.append(options)
         return try nextResult(from: &authorizationResults)
     }
 
     func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {
+        operations.append(.remove)
         removedRequestIdentifiers.append(identifiers)
     }
 
     func add(_ request: UNNotificationRequest) async throws {
+        operations.append(.add)
         addedRequests.append(request)
     }
 }
