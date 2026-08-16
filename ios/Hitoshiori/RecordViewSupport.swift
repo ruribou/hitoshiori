@@ -8,17 +8,12 @@ struct TodayReminderSection: View {
     @State private var isConfirmingPersonReplacement = false
 
     var body: some View {
-        Section {
-            TodayReminderCard(
-                reminder: reminder,
-                onShowPerson: onShowPerson,
-                onRecord: recordReminderPerson,
-                onDismiss: onDismiss
-            )
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-            .listRowSeparator(.hidden)
-        }
+        TodayReminderCard(
+            reminder: reminder,
+            onShowPerson: onShowPerson,
+            onRecord: recordReminderPerson,
+            onDismiss: onDismiss
+        )
         .confirmationDialog(
             "入力中の名前を「\(reminder.person.name)」に置き換えますか？",
             isPresented: $isConfirmingPersonReplacement,
@@ -107,8 +102,6 @@ struct TodayReminderCard: View {
             HitoshioriDesign.Palette.reminderBackground,
             in: RoundedRectangle(cornerRadius: HitoshioriDesign.CornerRadius.card, style: .continuous)
         )
-        .padding(.horizontal, HitoshioriDesign.Spacing.large)
-        .padding(.vertical, HitoshioriDesign.Spacing.xSmall)
     }
 }
 
@@ -130,26 +123,5 @@ enum ErrorMessageText {
             .compactMap { $0 }
             .filter { !$0.isEmpty }
         return nonEmptyMessages.isEmpty ? nil : nonEmptyMessages.joined(separator: "\n")
-    }
-}
-
-struct BackendStatusIndicator: View {
-    let status: RecordViewModel.BackendStatus
-
-    var body: some View {
-        switch status {
-        case .checking:
-            Image(systemName: "ellipsis.circle")
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("backend に接続中")
-        case .reachable:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(HitoshioriDesign.Palette.success)
-                .accessibilityLabel("backend に接続済み")
-        case .unreachable:
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(HitoshioriDesign.Palette.danger)
-                .accessibilityLabel("backend に未接続")
-        }
     }
 }

@@ -11,6 +11,7 @@ protocol RecordAPIClient: PeopleFetching {
         memo: String?,
         tagNames: [String]
     ) async throws -> Encounter
+    func deleteEncounter(id: Int, removeEmptyPerson: Bool) async throws
     func fetchTags() async throws -> [Tag]
 }
 
@@ -34,14 +35,19 @@ final class RecordViewModel {
     var backendStatus: BackendStatus = .checking
     var isLoading = false
     var isSaving = false
+    var isUndoing = false
     var didSave = false
     var errorMessage: String?
+    private(set) var lastSavedPersonName: String?
 
     private let client: any RecordAPIClient
     private let peopleStore: PeopleStore
     private(set) var selectedPerson: Person?
     private var memoBeforeTranscription: String?
     private var isStoppingVoiceMemo = false
+    private var lastSavedDraft: RecordDraft?
+    private var lastSavedEncounterID: Int?
+    private var lastSavedPersonWasNew = false
 
     init(
         client: any RecordAPIClient = APIClient.development,
@@ -71,15 +77,7 @@ final class RecordViewModel {
         selectedPerson != nil || !trimmedName.isEmpty
     }
 
-    var tagNamesForSubmission: [String] {
-        var names = tags.compactMap { selectedTagNames.contains($0.name) ? $0.name : nil }
-        let typedTagName = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if !typedTagName.isEmpty, !names.contains(typedTagName) {
-            names.append(typedTagName)
-        }
-        return names
-    }
+    var addedTagNames: [String] = []
 
     func load() async {
         errorMessage = nil
@@ -93,17 +91,23 @@ final class RecordViewModel {
                 backendStatus = .reachable
             } else {
                 backendStatus = .unreachable
-                appendErrorMessage("backend が HTTP \(statusCode) を返しています")
+                appendErrorMessage(Self.connectionErrorMessage)
             }
         } catch {
             backendStatus = .unreachable
-            appendErrorMessage(error.localizedDescription)
+            appendErrorMessage(Self.connectionErrorMessage)
         }
     }
 
     func select(person: Person) {
         selectedPerson = person
         name = person.name
+    }
+
+    func clearSelectedPerson() {
+        selectedPerson = nil
+        name = ""
+        errorMessage = nil
     }
 
     func selectExistingPerson(id: Int, name: String) {
@@ -210,11 +214,23 @@ final class RecordViewModel {
             person = .named(trimmedName)
         }
 
+        let draft = RecordDraft(
+            name: name,
+            topic: topic,
+            memo: memo,
+            newTagName: newTagName,
+            selectedTagNames: selectedTagNames,
+            addedTagNames: addedTagNames,
+            selectedPerson: selectedPerson
+        )
+        let savedPersonName = selectedPerson?.name ?? trimmedName
+        let shouldRemoveEmptyPerson = selectedPerson == nil
+
         isSaving = true
         errorMessage = nil
 
         do {
-            _ = try await client.createEncounter(
+            let encounter = try await client.createEncounter(
                 for: person,
                 metAt: nil,
                 topic: optionalValue(from: topic),
@@ -222,11 +238,15 @@ final class RecordViewModel {
                 tagNames: tagNamesForSubmission
             )
             resetForm()
+            lastSavedDraft = draft
+            lastSavedEncounterID = encounter.id
+            lastSavedPersonWasNew = shouldRemoveEmptyPerson
+            lastSavedPersonName = savedPersonName
             didSave = true
             isSaving = false
             await refreshPeopleAndTags()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = Self.messageForSaveFailure(error)
             isSaving = false
         }
     }
@@ -241,21 +261,21 @@ final class RecordViewModel {
 
         async let loadedPeople: Void = peopleStore.load()
         async let fetchedTags = client.fetchTags()
-        var errors: [String] = []
+        var didFailToLoad = false
 
         await loadedPeople
-        if let peopleErrorMessage = peopleStore.errorMessage {
-            errors.append(peopleErrorMessage)
+        if peopleStore.errorMessage != nil {
+            didFailToLoad = true
         }
 
         do {
             tags = try await fetchedTags
         } catch {
-            errors.append(error.localizedDescription)
+            didFailToLoad = true
         }
 
-        for errorMessage in errors {
-            appendErrorMessage(errorMessage)
+        if didFailToLoad {
+            appendErrorMessage(Self.loadingErrorMessage)
         }
     }
 
@@ -274,10 +294,11 @@ final class RecordViewModel {
         newTagName = ""
         selectedPerson = nil
         selectedTagNames = []
+        addedTagNames = []
         endMemoTranscription()
     }
 
-    private func normalized(_ value: String) -> String {
+    func normalized(_ value: String) -> String {
         value
             .folding(
                 options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
@@ -289,5 +310,77 @@ final class RecordViewModel {
     private func optionalValue(from value: String) -> String? {
         let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedValue.isEmpty ? nil : trimmedValue
+    }
+}
+
+private struct RecordDraft {
+    let name: String
+    let topic: String
+    let memo: String
+    let newTagName: String
+    let selectedTagNames: Set<String>
+    let addedTagNames: [String]
+    let selectedPerson: Person?
+}
+
+@MainActor
+extension RecordViewModel {
+    func restoreLastSavedDraft() {
+        guard let lastSavedDraft else { return }
+
+        name = lastSavedDraft.name
+        topic = lastSavedDraft.topic
+        memo = lastSavedDraft.memo
+        newTagName = lastSavedDraft.newTagName
+        selectedTagNames = lastSavedDraft.selectedTagNames
+        addedTagNames = lastSavedDraft.addedTagNames
+        selectedPerson = lastSavedDraft.selectedPerson
+        self.lastSavedDraft = nil
+        lastSavedEncounterID = nil
+        lastSavedPersonWasNew = false
+        lastSavedPersonName = nil
+        didSave = false
+    }
+
+    func undoLastSavedRecord() async {
+        guard let lastSavedEncounterID, !isUndoing else { return }
+
+        isUndoing = true
+        errorMessage = nil
+        defer { isUndoing = false }
+
+        do {
+            try await client.deleteEncounter(
+                id: lastSavedEncounterID,
+                removeEmptyPerson: lastSavedPersonWasNew
+            )
+            restoreLastSavedDraft()
+            await refreshPeopleAndTags()
+        } catch {
+            errorMessage = "記録を取り消せませんでした。接続を確認して、もう一度試してください。"
+        }
+    }
+
+    func dismissSavedFeedback() {
+        didSave = false
+        lastSavedDraft = nil
+        lastSavedEncounterID = nil
+        lastSavedPersonWasNew = false
+        lastSavedPersonName = nil
+    }
+
+    private static let connectionErrorMessage = "サーバーに接続できません。接続を確認して、もう一度試してください。"
+    private static let loadingErrorMessage = "記録に必要な情報を読み込めませんでした。接続を確認して、もう一度試してください。"
+
+    private static func messageForSaveFailure(_ error: Error) -> String {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .badRequest(let response), .unprocessableEntity(let response):
+                return response.message
+            case .invalidResponse, .notFound, .unexpectedStatus:
+                break
+            }
+        }
+        return "記録を保存できませんでした。接続を確認して、もう一度試してください。"
     }
 }

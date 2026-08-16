@@ -85,6 +85,39 @@ struct APIClient: Sendable {
         return response.encounter
     }
 
+    func deleteEncounter(id: Int, removeEmptyPerson: Bool) async throws {
+        let encounterURL = baseURL.appending(path: "api/v1/encounters/\(id)")
+        var components = URLComponents(url: encounterURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = removeEmptyPerson
+            ? [ URLQueryItem(name: "remove_empty_person", value: "true") ]
+            : []
+        guard let url = components?.url else {
+            throw APIError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200..<300:
+            return
+        case 400:
+            throw APIError.badRequest(Self.decodeError(from: data))
+        case 404:
+            throw APIError.notFound(Self.decodeError(from: data))
+        case 422:
+            throw APIError.unprocessableEntity(Self.decodeError(from: data))
+        default:
+            throw APIError.unexpectedStatus(httpResponse.statusCode)
+        }
+    }
+
     func fetchPeople() async throws -> [Person] {
         let response: PeopleResponse = try await send(path: "api/v1/people")
         return response.people

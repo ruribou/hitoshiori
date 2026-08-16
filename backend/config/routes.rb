@@ -1,7 +1,7 @@
 Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
-      resources :encounters, only: :create
+      resources :encounters, only: [ :create, :destroy ]
       resources :people, only: [ :index, :show ]
       patch "people/:id", to: "people#update", as: :person_update
       resources :tags, only: :index

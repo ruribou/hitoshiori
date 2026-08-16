@@ -124,6 +124,7 @@ struct RecordViewModelTests {
         #expect(viewModel.memo.isEmpty)
         #expect(viewModel.newTagName.isEmpty)
         #expect(viewModel.selectedTagNames.isEmpty)
+        #expect(viewModel.addedTagNames.isEmpty)
         #expect(viewModel.didSave)
     }
 
@@ -149,7 +150,7 @@ struct RecordViewModelTests {
         #expect(viewModel.errorMessage == nil)
     }
 
-    @Test("HTTP 500のヘルスチェックは未接続として扱う")
+    @Test("ヘルスチェックの失敗は技術詳細を出さずに未接続として扱う")
     func treatsNonSuccessHealthStatusAsUnreachable() async {
         let client = StubRecordAPIClient()
         client.healthResults = [.success(500)]
@@ -158,7 +159,7 @@ struct RecordViewModelTests {
         await viewModel.load()
 
         #expect(viewModel.backendStatus == .unreachable)
-        #expect(viewModel.errorMessage?.contains("HTTP 500") == true)
+        #expect(viewModel.errorMessage == "サーバーに接続できません。接続を確認して、もう一度試してください。")
     }
 
     @Test("取得失敗は理由を表示する")
@@ -169,7 +170,7 @@ struct RecordViewModelTests {
 
         await viewModel.load()
 
-        #expect(viewModel.errorMessage == "接続できませんでした")
+        #expect(viewModel.errorMessage == "記録に必要な情報を読み込めませんでした。接続を確認して、もう一度試してください。")
     }
 
     @Test("保存に失敗しても入力内容を保持し、名前を直すとエラーを消す")
@@ -188,7 +189,7 @@ struct RecordViewModelTests {
         #expect(viewModel.topic == "勉強会")
         #expect(viewModel.memo == "次はRailsの話をする")
         #expect(viewModel.newTagName == "STECH")
-        #expect(viewModel.errorMessage == "接続できませんでした")
+        #expect(viewModel.errorMessage == "記録を保存できませんでした。接続を確認して、もう一度試してください。")
 
         viewModel.updateName("たなかさん")
 
@@ -297,7 +298,7 @@ struct RecordViewModelTests {
 }
 
 @MainActor
-private final class StubRecordAPIClient: RecordAPIClient {
+final class StubRecordAPIClient: RecordAPIClient {
     struct CreateEncounterCall: Equatable {
         let person: EncounterPersonTarget
         let metAt: Date?
@@ -306,11 +307,18 @@ private final class StubRecordAPIClient: RecordAPIClient {
         let tagNames: [String]
     }
 
+    struct DeleteEncounterCall: Equatable {
+        let id: Int
+        let removeEmptyPerson: Bool
+    }
+
     var healthResults: [Result<Int, Error>] = [.success(200)]
     var peopleResults: [Result<[Person], Error>] = [.success([])]
     var tagResults: [Result<[Hitoshiori.Tag], Error>] = [.success([])]
     var createEncounterResults: [Result<Encounter, Error>] = [.success(.fixture)]
+    var deleteEncounterResults: [Result<Void, Error>] = [.success(())]
     private(set) var createCalls: [CreateEncounterCall] = []
+    private(set) var deleteCalls: [DeleteEncounterCall] = []
 
     func health() async throws -> Int {
         try nextResult(from: &healthResults)
@@ -333,6 +341,11 @@ private final class StubRecordAPIClient: RecordAPIClient {
             )
         )
         return try nextResult(from: &createEncounterResults)
+    }
+
+    func deleteEncounter(id: Int, removeEmptyPerson: Bool) async throws {
+        deleteCalls.append(DeleteEncounterCall(id: id, removeEmptyPerson: removeEmptyPerson))
+        try nextResult(from: &deleteEncounterResults)
     }
 
     func fetchPeople() async throws -> [Person] {

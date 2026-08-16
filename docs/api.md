@@ -82,6 +82,25 @@ Rails 組み込みヘルスチェック。アプリが起動していれば 200�
 
 ---
 
+## DELETE /api/v1/encounters/:id
+
+保存直後の記録を取り消す。iOS の成功表示から、短時間だけ呼び出す API。
+
+- 成功時は `204 No Content` を返す
+- `remove_empty_person=true` を付けると、削除後に接触履歴が 0 件となった人物も削除する。
+  新規人物を作った記録の取り消しにだけ使う
+- 既存人物への追記を取り消す場合は、人物を残して `last_encountered_at` を残りの履歴から再計算する
+- タグは他の記録で再利用できるため、記録を取り消しても削除しない
+- 存在しない ID は共通形式の `404 Not Found` を返す
+
+リクエスト例
+
+```text
+DELETE /api/v1/encounters/1?remove_empty_person=true
+```
+
+---
+
 ## GET /api/v1/people
 
 記録した人の一覧。`last_encountered_at` の降順(最近会った人が先頭)。
