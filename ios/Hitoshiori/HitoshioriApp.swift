@@ -9,8 +9,6 @@ struct HitoshioriApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .tint(HitoshioriDesign.Color.accent)
-                .background(HitoshioriDesign.Color.launchBackground)
         }
     }
 }

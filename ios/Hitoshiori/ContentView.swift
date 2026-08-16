@@ -122,7 +122,7 @@ private struct RecordView: View {
 
                 if viewModel.selectedPerson != nil {
                     Label("既存の人物として記録します", systemImage: "person.fill.checkmark")
-                        .font(.footnote)
+                        .font(HitoshioriDesign.Typography.metadata)
                         .foregroundStyle(.secondary)
                 } else if !viewModel.suggestions.isEmpty {
                     ForEach(viewModel.suggestions, id: \.id) { person in
@@ -151,13 +151,13 @@ private struct RecordView: View {
                     }
                 } else if viewModel.tags.isEmpty {
                     Text("よく使うタグは保存後にここに並びます")
-                        .font(.footnote)
+                        .font(HitoshioriDesign.Typography.metadata)
                         .foregroundStyle(.secondary)
                 } else {
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 82), spacing: HitoshioriDesign.Spacing.medium)],
+                        columns: [GridItem(.adaptive(minimum: 82), spacing: HitoshioriDesign.Spacing.small)],
                         alignment: .leading,
-                        spacing: HitoshioriDesign.Spacing.medium
+                        spacing: HitoshioriDesign.Spacing.small
                     ) {
                         ForEach(viewModel.tags, id: \.id) { tag in
                             TagChip(
@@ -191,25 +191,25 @@ private struct RecordView: View {
                     )
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(transcriber.isRecording ? HitoshioriDesign.Color.danger : HitoshioriDesign.Color.accent)
+                .tint(transcriber.isRecording ? HitoshioriDesign.Palette.danger : nil)
                 .disabled(transcriber.isRequestingPermission || transcriber.isFinishing || transcriber.needsSettings)
 
                 if transcriber.isRecording {
                     Label("録音・文字起こし中", systemImage: "waveform")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(HitoshioriDesign.Color.danger)
+                        .foregroundStyle(HitoshioriDesign.Palette.danger)
                 } else if transcriber.isFinishing {
-                    HStack(spacing: HitoshioriDesign.Spacing.medium) {
+                    HStack(spacing: HitoshioriDesign.Spacing.small) {
                         ProgressView()
                         Text("文字起こしを完了中…")
-                            .font(.footnote)
+                            .font(HitoshioriDesign.Typography.metadata)
                             .foregroundStyle(.secondary)
                     }
                 } else if transcriber.isRequestingPermission {
-                    HStack(spacing: HitoshioriDesign.Spacing.medium) {
+                    HStack(spacing: HitoshioriDesign.Spacing.small) {
                         ProgressView()
                         Text("マイクと音声認識を確認中…")
-                            .font(.footnote)
+                            .font(HitoshioriDesign.Typography.metadata)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -223,7 +223,7 @@ private struct RecordView: View {
             if transcriber.needsSettings {
                 Section {
                     Text("音声メモにはマイクと音声認識の許可が必要です。")
-                        .font(.footnote)
+                        .font(HitoshioriDesign.Typography.metadata)
                         .foregroundStyle(.secondary)
 
                     Button("設定を開く") {
@@ -245,7 +245,7 @@ private struct RecordView: View {
                         Spacer()
                         if viewModel.isSaving {
                             ProgressView()
-                                .padding(.trailing, HitoshioriDesign.Spacing.small)
+                                .padding(.trailing, 6)
                         }
                         Text("記録する")
                             .fontWeight(.semibold)
@@ -259,11 +259,11 @@ private struct RecordView: View {
             if viewModel.didSave {
                 Label("記録しました", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(HitoshioriDesign.Color.success)
-                    .padding(.horizontal, HitoshioriDesign.Spacing.xLarge)
-                    .padding(.vertical, HitoshioriDesign.Spacing.medium)
+                    .foregroundStyle(HitoshioriDesign.Palette.success)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, HitoshioriDesign.Spacing.small)
                     .background(.thinMaterial, in: Capsule())
-                    .padding(.top, HitoshioriDesign.Spacing.medium)
+                    .padding(.top, HitoshioriDesign.Spacing.small)
                     .transition(.opacity)
             }
         }
@@ -350,16 +350,19 @@ private struct TagChip: View {
             Text(name)
                 .font(.subheadline)
                 .lineLimit(1)
-                .padding(.horizontal, HitoshioriDesign.Spacing.regular)
-                .padding(.vertical, HitoshioriDesign.Spacing.small)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? HitoshioriDesign.Color.selectedChipText : .primary)
-        .background(
-            isSelected ? HitoshioriDesign.Color.accent : HitoshioriDesign.Color.chipBackground,
-            in: Capsule()
-        )
+        .foregroundStyle(isSelected ? HitoshioriDesign.Palette.selectedChipText : .primary)
+        .background {
+            Capsule().fill(
+                isSelected
+                    ? AnyShapeStyle(.tint)
+                    : AnyShapeStyle(HitoshioriDesign.Palette.chipBackground)
+            )
+        }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 人を思い出すための栞。ティント外観用のグレースケール。 -->
+  <rect width="1024" height="1024" fill="#F5F5F5"/>
+  <circle cx="430" cy="372" r="154" fill="#1D1D1D"/>
+  <path d="M156 836c20-187 141-297 274-297s254 110 274 297H156Z" fill="#1D1D1D"/>
+  <path d="M558 126h172v456l-86-58-86 58V126Z" fill="#777777"/>
+</svg>

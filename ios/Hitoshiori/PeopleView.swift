@@ -79,7 +79,7 @@ struct PersonDetailView: View {
                     LabeledContent("名前", value: person.name)
 
                     if !person.note.isEmpty {
-                        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.small) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text("メモ")
                                 .font(.subheadline.weight(.semibold))
                             Text(person.note)
@@ -198,7 +198,7 @@ private struct PersonRow: View {
             Text(person.name)
                 .font(.body.weight(.semibold))
 
-            HStack(spacing: HitoshioriDesign.Spacing.medium) {
+            HStack(spacing: HitoshioriDesign.Spacing.small) {
                 Text(EncounterDateText.relativeDescription(for: person.lastEncounteredAt))
                 Text("\(person.encountersCount)回記録")
             }
@@ -212,7 +212,7 @@ private struct EncounterHistoryRow: View {
     let encounter: EncounterHistory
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.medium) {
+        VStack(alignment: .leading, spacing: HitoshioriDesign.Spacing.small) {
             Text(encounter.metAt.formatted(date: .abbreviated, time: .shortened))
                 .font(.subheadline.weight(.semibold))
 
@@ -228,7 +228,7 @@ private struct EncounterHistoryRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, HitoshioriDesign.Spacing.xxSmall)
+        .padding(.vertical, 2)
     }
 }
 

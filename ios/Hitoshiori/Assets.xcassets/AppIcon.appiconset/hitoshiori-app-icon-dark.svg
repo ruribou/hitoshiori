@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 人を思い出すための栞。ダーク外観用。 -->
+  <rect width="1024" height="1024" fill="#191A22"/>
+  <circle cx="430" cy="372" r="154" fill="#E4E8F5"/>
+  <path d="M156 836c20-187 141-297 274-297s254 110 274 297H156Z" fill="#E4E8F5"/>
+  <path d="M558 126h172v456l-86-58-86 58V126Z" fill="#D45A72"/>
+</svg>
