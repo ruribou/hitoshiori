@@ -80,13 +80,22 @@ Solid Queue のテーブルがアプリのスキーマに混ざらず、`db:rese
 ### ios
 
 ```bash
+brew install xcode-build-server
+
 cd ios
 xcodegen generate          # project.yml から Hitoshiori.xcodeproj を生成
+xcode-build-server config -project Hitoshiori.xcodeproj -scheme Hitoshiori
+xcodebuild build -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
 open Hitoshiori.xcodeproj
 ```
 
 `.xcodeproj` は生成物のため git 管理外。ターゲット構成やビルド設定の変更は
-`ios/project.yml` を編集して `xcodegen generate` を再実行する。
+`ios/project.yml` を編集して `xcodegen generate` を再実行する。XcodeGen による再生成後は、
+SourceKit-LSP 用の `buildServer.json` も上記の `xcode-build-server config` で作り直してから
+一度ビルドする。ソースファイルを追加した場合も同様にビルドする。
+
+`buildServer.json` はローカルの DerivedData の絶対パスを含むため git 管理しない。Zed など
+SourceKit-LSP を使うエディタでは、このファイルにより iOS SDK とアプリ全体のコンパイル引数を取得できる。
 
 シミュレータからは `http://localhost:3000` でホストの backend に到達。
 起動直後の画面が backend のヘルスチェック結果を表示するため、そのまま疎通確認に使える。
@@ -121,6 +130,7 @@ docker compose restart backend jobs
 ```bash
 cd ios
 xcodegen generate
+xcode-build-server config -project Hitoshiori.xcodeproj -scheme Hitoshiori
 xcodebuild build -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
 xcodebuild test  -scheme Hitoshiori -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
