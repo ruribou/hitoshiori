@@ -178,21 +178,19 @@ private struct RecordView: View {
             Section("話したこと") {
                 TextField("話題（任意）", text: $viewModel.topic)
 
-                Button {
+                VoiceMemoButton(
+                    title: microphoneButtonTitle,
+                    isRecording: transcriber.isRecording,
+                    isDisabled: transcriber.isRequestingPermission ||
+                        transcriber.isFinishing ||
+                        transcriber.needsSettings
+                ) {
                     if transcriber.isRecording {
                         transcriber.stop()
                     } else {
                         Task { await viewModel.startVoiceMemo(using: transcriber) }
                     }
-                } label: {
-                    Label(
-                        microphoneButtonTitle,
-                        systemImage: transcriber.isRecording ? "stop.circle.fill" : "mic.circle.fill"
-                    )
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(transcriber.isRecording ? HitoshioriDesign.Palette.danger : nil)
-                .disabled(transcriber.isRequestingPermission || transcriber.isFinishing || transcriber.needsSettings)
 
                 if transcriber.isRecording {
                     Label("録音・文字起こし中", systemImage: "waveform")
@@ -338,6 +336,32 @@ private struct RecordView: View {
         onRecordFinished(viewModel.didSave, selectedPersonID == reminderPersonID ? selectedPersonID : nil)
     }
 
+}
+
+private struct VoiceMemoButton: View {
+    let title: String
+    let isRecording: Bool
+    let isDisabled: Bool
+    let action: () -> Void
+
+    private var button: some View {
+        Button(action: action) {
+            Label(title, systemImage: isRecording ? "stop.circle.fill" : "mic")
+        }
+        .disabled(isDisabled)
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if isRecording {
+            button
+                .buttonStyle(.borderedProminent)
+                .tint(HitoshioriDesign.Palette.danger)
+        } else {
+            button
+                .buttonStyle(.bordered)
+        }
+    }
 }
 
 private struct TagChip: View {
