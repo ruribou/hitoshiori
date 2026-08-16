@@ -5,8 +5,8 @@ import Testing
 
 @MainActor
 struct RecordViewModelTests {
-    @Test("名前または既存人物があれば保存できる")
-    func canSaveWithNameOrSelectedPerson() {
+    @Test("名前または既存人物があり、保存中でなければ保存できる")
+    func canSaveWithPersonInputWhenNotSaving() {
         let viewModel = RecordViewModel(client: StubRecordAPIClient())
 
         #expect(!viewModel.canSave)
@@ -14,17 +14,12 @@ struct RecordViewModelTests {
         viewModel.updateName("たなか")
 
         #expect(viewModel.canSave)
-    }
-
-    @Test("人物入力の有無を空白を除いて判定する")
-    func detectsPersonInputWithoutCountingWhitespace() {
-        let viewModel = RecordViewModel(client: StubRecordAPIClient())
-
         viewModel.updateName(" \n ")
-        #expect(!viewModel.hasPersonInput)
+        #expect(!viewModel.canSave)
 
         viewModel.updateName("さとう")
-        #expect(viewModel.hasPersonInput)
+        viewModel.isSaving = true
+        #expect(!viewModel.canSave)
     }
 
     @Test("入力済みの人物は確認なしに今日の一人へ置き換えない")

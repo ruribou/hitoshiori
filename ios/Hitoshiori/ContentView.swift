@@ -29,7 +29,11 @@ struct ContentView: View {
             RecordView(
                 viewModel: recordViewModel,
                 reminder: reminderViewModel.reminder,
+                isReminderVisible: reminderViewModel.isCardVisible,
+                reminderErrorMessage: reminderViewModel.errorMessage,
                 onShowPerson: showPerson,
+                onDismissReminder: reminderViewModel.dismissCard,
+                onRecordFinished: reminderViewModel.recordDidFinish,
                 transcriber: transcriber
             )
                 .tabItem {
@@ -59,33 +63,44 @@ struct ContentView: View {
 
 @MainActor
 private struct RecordView: View {
-    @State private var isTodayReminderVisible = true
     @Environment(\.scenePhase) private var scenePhase
     @Bindable private var viewModel: RecordViewModel
     private let reminder: Reminder?
+    private let isReminderVisible: Bool
+    private let reminderErrorMessage: String?
     private let onShowPerson: (Int) -> Void
+    private let onDismissReminder: () -> Void
+    private let onRecordFinished: (Bool, Int?) -> Void
     private let transcriber: any SpeechTranscribing
 
     init(
         viewModel: RecordViewModel,
         reminder: Reminder?,
+        isReminderVisible: Bool,
+        reminderErrorMessage: String?,
         onShowPerson: @escaping (Int) -> Void,
+        onDismissReminder: @escaping () -> Void,
+        onRecordFinished: @escaping (Bool, Int?) -> Void,
         transcriber: any SpeechTranscribing
     ) {
         _viewModel = Bindable(wrappedValue: viewModel)
         self.reminder = reminder
+        self.isReminderVisible = isReminderVisible
+        self.reminderErrorMessage = reminderErrorMessage
         self.onShowPerson = onShowPerson
+        self.onDismissReminder = onDismissReminder
+        self.onRecordFinished = onRecordFinished
         self.transcriber = transcriber
     }
 
     var body: some View {
         Form {
-            if let reminder, isTodayReminderVisible {
+            if let reminder, isReminderVisible {
                 TodayReminderSection(
                     reminder: reminder,
                     viewModel: viewModel,
-                    isVisible: $isTodayReminderVisible,
-                    onShowPerson: { onShowPerson(reminder.person.id) }
+                    onShowPerson: { onShowPerson(reminder.person.id) },
+                    onDismiss: onDismissReminder
                 )
             }
 
@@ -224,7 +239,7 @@ private struct RecordView: View {
 
             Section {
                 Button {
-                    Task { await viewModel.save(using: transcriber) }
+                    Task { await saveRecord() }
                 } label: {
                     HStack {
                         Spacer()
@@ -237,7 +252,7 @@ private struct RecordView: View {
                         Spacer()
                     }
                 }
-                .disabled(!viewModel.canSave || viewModel.isSaving)
+                .disabled(!viewModel.canSave)
             }
         }
         .overlay(alignment: .top) {
@@ -271,9 +286,6 @@ private struct RecordView: View {
             guard state == .idle else { return }
             viewModel.finishVoiceMemo(with: transcriber.transcript)
         }
-        .onChange(of: reminder?.id) { _, _ in
-            isTodayReminderVisible = true
-        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 transcriber.refreshPermissionState()
@@ -297,10 +309,11 @@ private struct RecordView: View {
     }
 
     private var displayedErrorMessage: String? {
-        let messages = [transcriber.errorMessage, viewModel.errorMessage]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-        return messages.isEmpty ? nil : messages.joined(separator: "\n")
+        ErrorMessageText.combined([
+            transcriber.errorMessage,
+            viewModel.errorMessage,
+            reminderErrorMessage
+        ])
     }
 
     @ViewBuilder
@@ -314,6 +327,15 @@ private struct RecordView: View {
         guard transcriber.isRecording || transcriber.isFinishing else { return }
 
         Task { await viewModel.stopVoiceMemo(using: transcriber) }
+    }
+
+    private func saveRecord() async {
+        let reminderPersonID = reminder?.person.id
+        let selectedPersonID = viewModel.selectedPerson?.id
+
+        await viewModel.save(using: transcriber)
+
+        onRecordFinished(viewModel.didSave, selectedPersonID == reminderPersonID ? selectedPersonID : nil)
     }
 
 }

@@ -2,9 +2,9 @@ import SwiftUI
 
 struct TodayReminderSection: View {
     let reminder: Reminder
-    @Bindable var viewModel: RecordViewModel
-    @Binding var isVisible: Bool
+    let viewModel: RecordViewModel
     let onShowPerson: () -> Void
+    let onDismiss: () -> Void
     @State private var isConfirmingPersonReplacement = false
 
     var body: some View {
@@ -13,7 +13,7 @@ struct TodayReminderSection: View {
                 reminder: reminder,
                 onShowPerson: onShowPerson,
                 onRecord: recordReminderPerson,
-                onDismiss: { isVisible = false }
+                onDismiss: onDismiss
             )
         }
         .confirmationDialog(
@@ -35,7 +35,6 @@ struct TodayReminderSection: View {
             id: reminder.person.id,
             name: reminder.person.name
         ) {
-            isVisible = false
             return
         }
 
@@ -44,7 +43,6 @@ struct TodayReminderSection: View {
 
     private func replacePersonInputWithReminder() {
         viewModel.selectExistingPerson(id: reminder.person.id, name: reminder.person.name)
-        isVisible = false
     }
 }
 
@@ -66,6 +64,7 @@ struct TodayReminderCard: View {
                 Button("閉じる", systemImage: "xmark") {
                     onDismiss()
                 }
+                .buttonStyle(.borderless)
                 .labelStyle(.iconOnly)
                 .accessibilityLabel("今日の一人を閉じる")
             }
@@ -76,13 +75,9 @@ struct TodayReminderCard: View {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
 
-                    if let lastEncounterDescription = ReminderCardText.lastEncounterDescription(
-                        for: reminder.person.lastEncounteredAt
-                    ) {
-                        Text(lastEncounterDescription)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(EncounterDateText.relativeDescription(for: reminder.person.lastEncounteredAt))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
                     if let lastEncounter = reminder.person.lastEncounter {
                         if let topic = lastEncounter.topic, !topic.isEmpty {
@@ -99,27 +94,12 @@ struct TodayReminderCard: View {
             .buttonStyle(.plain)
             .accessibilityHint("人物の詳細を開きます")
 
-            Button("記録する", systemImage: "square.and.pencil", action: onRecord)
+            Button("この人で記録をはじめる", systemImage: "person.badge.plus", action: onRecord)
                 .buttonStyle(.borderedProminent)
+                .accessibilityLabel("この人で記録をはじめる")
+                .accessibilityHint("人物を選択して、下の記録するボタンで保存します")
         }
         .padding(.vertical, 4)
-    }
-}
-
-enum ReminderCardText {
-    static func lastEncounterDescription(
-        for date: Date?,
-        relativeTo referenceDate: Date = .now,
-        calendar: Calendar = .current
-    ) -> String? {
-        guard let date else { return nil }
-
-        let relativeDescription = EncounterDateText.relativeDescription(
-            for: date,
-            relativeTo: referenceDate,
-            calendar: calendar
-        )
-        return "最後に会った日: \(relativeDescription)"
     }
 }
 
@@ -132,6 +112,15 @@ struct TagListText: View {
                 .font(.footnote)
                 .foregroundStyle(.tint)
         }
+    }
+}
+
+enum ErrorMessageText {
+    static func combined(_ messages: [String?]) -> String? {
+        let nonEmptyMessages = messages
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+        return nonEmptyMessages.isEmpty ? nil : nonEmptyMessages.joined(separator: "\n")
     }
 }
 

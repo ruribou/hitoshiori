@@ -10,7 +10,7 @@ struct PeopleListView: View {
     init(
         store: PeopleStore = PeopleStore(),
         client: any PeopleAPIClient = APIClient.development,
-        path: Binding<[Int]> = .constant([])
+        path: Binding<[Int]>
     ) {
         _store = State(initialValue: store)
         _path = path
@@ -240,6 +240,14 @@ private struct ErrorMessageRow: View {
     }
 }
 
+private struct PeopleListPreview: View {
+    @State private var path: [Int] = []
+
+    var body: some View {
+        PeopleListView(path: $path)
+    }
+}
+
 #Preview("人物一覧") {
-    PeopleListView()
+    PeopleListPreview()
 }

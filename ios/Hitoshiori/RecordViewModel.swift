@@ -64,10 +64,10 @@ final class RecordViewModel {
     }
 
     var canSave: Bool {
-        hasPersonInput
+        !isSaving && hasPersonInput
     }
 
-    var hasPersonInput: Bool {
+    private var hasPersonInput: Bool {
         selectedPerson != nil || !trimmedName.isEmpty
     }
 
