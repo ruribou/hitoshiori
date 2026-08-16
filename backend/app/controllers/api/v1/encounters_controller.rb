@@ -21,6 +21,19 @@ module Api
         render json: encounter_response(encounter, tags), status: :created
       end
 
+      def destroy
+        encounter = Encounter.find(params[:id])
+        person = encounter.person
+
+        ActiveRecord::Base.transaction do
+          person.lock!
+          encounter.destroy!
+          person.destroy! if remove_empty_person? && person.encounters.none?
+        end
+
+        head :no_content
+      end
+
       private
 
       def encounter_params
@@ -34,6 +47,10 @@ module Api
           memo: raw_parameters[:memo],
           tag_names: raw_parameters.key?(:tag_names) ? raw_parameters[:tag_names] : []
         }
+      end
+
+      def remove_empty_person?
+        ActiveModel::Type::Boolean.new.cast(params[:remove_empty_person])
       end
 
       def find_or_create_person(form)

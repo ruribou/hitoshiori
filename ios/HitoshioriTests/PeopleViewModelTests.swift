@@ -320,6 +320,8 @@ private final class StubPeopleAPIClient: PeopleAPIClient, RecordAPIClient {
         .fixture
     }
 
+    func deleteEncounter(id: Int, removeEmptyPerson: Bool) async throws {}
+
     func fetchPeople() async throws -> [Person] {
         peopleFetchCallCount += 1
         if let peopleDelay {
